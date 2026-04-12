@@ -1,0 +1,284 @@
+import React from 'react';
+import { 
+  TrendingUp, 
+  TrendingDown, 
+  DollarSign, 
+  Activity, 
+  PieChart, 
+  ArrowUpRight, 
+  ArrowDownRight,
+  Bot,
+  Wallet
+} from 'lucide-react';
+import { 
+  AreaChart, 
+  Area, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer,
+  PieChart as RePieChart,
+  Pie,
+  Cell
+} from 'recharts';
+import { Account, Position, Order, LedgerEvent, Agent } from '../types';
+import { MOCK_SYMBOLS } from '../constants';
+
+interface DashboardProps {
+  account: Account | null;
+  positions: Position[];
+  orders: Order[];
+  ledger: LedgerEvent[];
+  agents: Agent[];
+}
+
+const StatCard = ({ title, value, subValue, icon: Icon, trend }: any) => (
+  <div className="bg-[#0F0F11] border border-zinc-800/50 rounded-2xl p-5 hover:border-zinc-700/50 transition-all group">
+    <div className="flex justify-between items-start mb-4">
+      <div className="p-2.5 bg-zinc-900 rounded-xl group-hover:bg-emerald-500/10 group-hover:text-emerald-400 transition-colors">
+        <Icon size={20} />
+      </div>
+      {trend && (
+        <div className={`flex items-center gap-1 text-xs font-bold ${trend > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+          {trend > 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
+          {Math.abs(trend)}%
+        </div>
+      )}
+    </div>
+    <p className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-1">{title}</p>
+    <h3 className="text-2xl font-mono font-bold text-white">{value}</h3>
+    {subValue && <p className="text-xs text-zinc-500 mt-1">{subValue}</p>}
+  </div>
+);
+
+export default function Dashboard({ account, positions, orders, ledger, agents }: DashboardProps) {
+  // Calculate total equity
+  const holdingsValue = positions.reduce((acc, pos) => {
+    const symbolInfo = MOCK_SYMBOLS.find(s => s.symbol === pos.symbol);
+    return acc + (pos.quantity * (symbolInfo?.price || pos.averageEntryPrice));
+  }, 0);
+
+  const totalEquity = (account?.cashBalance || 0) + holdingsValue;
+  const unrealizedPL = positions.reduce((acc, pos) => {
+    const symbolInfo = MOCK_SYMBOLS.find(s => s.symbol === pos.symbol);
+    const currentVal = pos.quantity * (symbolInfo?.price || pos.averageEntryPrice);
+    const costBasis = pos.quantity * pos.averageEntryPrice;
+    return acc + (currentVal - costBasis);
+  }, 0);
+
+  const chartData = [
+    { name: 'Mon', value: totalEquity * 0.92 },
+    { name: 'Tue', value: totalEquity * 0.95 },
+    { name: 'Wed', value: totalEquity * 0.94 },
+    { name: 'Thu', value: totalEquity * 0.98 },
+    { name: 'Fri', value: totalEquity },
+  ];
+
+  const allocationData = [
+    { name: 'Cash', value: account?.cashBalance || 0, color: '#10b981' },
+    { name: 'Stocks', value: holdingsValue * 0.6, color: '#3b82f6' },
+    { name: 'Crypto', value: holdingsValue * 0.4, color: '#f59e0b' },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard 
+          title="Total Equity" 
+          value={`$${totalEquity.toLocaleString(undefined, { minimumFractionDigits: 2 })}`} 
+          subValue="Combined cash & holdings"
+          icon={DollarSign}
+          trend={2.4}
+        />
+        <StatCard 
+          title="Cash Balance" 
+          value={`$${(account?.cashBalance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`} 
+          subValue="Available buying power"
+          icon={Wallet}
+        />
+        <StatCard 
+          title="Unrealized P/L" 
+          value={`$${unrealizedPL.toLocaleString(undefined, { minimumFractionDigits: 2 })}`} 
+          subValue="Current open profit/loss"
+          icon={Activity}
+          trend={unrealizedPL >= 0 ? 5.2 : -2.1}
+        />
+        <StatCard 
+          title="Active Bots" 
+          value={agents.filter(a => a.status === 'running').length} 
+          subValue="Bots currently trading"
+          icon={Bot}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 bg-[#0F0F11] border border-zinc-800/50 rounded-2xl p-6">
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="text-lg font-bold">Equity Curve</h3>
+            <div className="flex gap-2">
+              {['1D', '1W', '1M', 'ALL'].map(t => (
+                <button key={t} className={`px-3 py-1 text-xs font-bold rounded-lg border transition-all ${t === '1W' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'border-zinc-800 text-zinc-500 hover:border-zinc-700'}`}>
+                  {t}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="h-[300px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={chartData}>
+                <defs>
+                  <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" vertical={false} />
+                <XAxis dataKey="name" stroke="#6b7280" fontSize={12} tickLine={false} axisLine={false} />
+                <YAxis stroke="#6b7280" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(v) => `$${v/1000}k`} />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: '#0F0F11', border: '1px solid #374151', borderRadius: '12px' }}
+                  itemStyle={{ color: '#10b981' }}
+                />
+                <Area type="monotone" dataKey="value" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorValue)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="bg-[#0F0F11] border border-zinc-800/50 rounded-2xl p-6">
+          <h3 className="text-lg font-bold mb-6">Asset Allocation</h3>
+          <div className="h-[250px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <RePieChart>
+                <Pie
+                  data={allocationData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={80}
+                  paddingAngle={5}
+                  dataKey="value"
+                >
+                  {allocationData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip 
+                  contentStyle={{ backgroundColor: '#0F0F11', border: '1px solid #374151', borderRadius: '12px' }}
+                />
+              </RePieChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="space-y-3 mt-4">
+            {allocationData.map((item) => (
+              <div key={item.name} className="flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }}></div>
+                  <span className="text-sm text-zinc-400">{item.name}</span>
+                </div>
+                <span className="text-sm font-mono font-bold">${item.value.toLocaleString()}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-[#0F0F11] border border-zinc-800/50 rounded-2xl overflow-hidden">
+          <div className="p-6 border-b border-zinc-800/50 flex justify-between items-center">
+            <h3 className="text-lg font-bold">Open Positions</h3>
+            <button className="text-xs font-bold text-emerald-400 hover:text-emerald-300">View All</button>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold border-b border-zinc-800/50">
+                  <th className="px-6 py-4">Symbol</th>
+                  <th className="px-6 py-4">Qty</th>
+                  <th className="px-6 py-4">Avg Cost</th>
+                  <th className="px-6 py-4">Price</th>
+                  <th className="px-6 py-4 text-right">P/L</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-800/50">
+                {positions.slice(0, 5).map((pos) => {
+                  const symbolInfo = MOCK_SYMBOLS.find(s => s.symbol === pos.symbol);
+                  const currentPrice = symbolInfo?.price || pos.averageEntryPrice;
+                  const pl = (currentPrice - pos.averageEntryPrice) * pos.quantity;
+                  const plPercent = ((currentPrice / pos.averageEntryPrice) - 1) * 100;
+
+                  return (
+                    <tr key={pos.id} className="hover:bg-zinc-800/30 transition-colors group">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-zinc-800 rounded-lg flex items-center justify-center font-bold text-xs">
+                            {pos.symbol[0]}
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold">{pos.symbol}</p>
+                            <p className="text-[10px] text-zinc-500 uppercase">{pos.assetType}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-sm font-mono">{pos.quantity}</td>
+                      <td className="px-6 py-4 text-sm font-mono">${pos.averageEntryPrice.toFixed(2)}</td>
+                      <td className="px-6 py-4 text-sm font-mono">${currentPrice.toFixed(2)}</td>
+                      <td className={`px-6 py-4 text-sm font-mono text-right ${pl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {pl >= 0 ? '+' : ''}{pl.toFixed(2)}
+                        <span className="block text-[10px] opacity-70">{plPercent.toFixed(2)}%</span>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {positions.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-12 text-center text-zinc-500 italic">
+                      No open positions. Start trading to see holdings.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="bg-[#0F0F11] border border-zinc-800/50 rounded-2xl overflow-hidden">
+          <div className="p-6 border-b border-zinc-800/50 flex justify-between items-center">
+            <h3 className="text-lg font-bold">Recent Activity</h3>
+            <button className="text-xs font-bold text-emerald-400 hover:text-emerald-300">View History</button>
+          </div>
+          <div className="divide-y divide-zinc-800/50">
+            {ledger.slice(0, 6).map((event) => (
+              <div key={event.id} className="px-6 py-4 flex items-center justify-between hover:bg-zinc-800/30 transition-colors">
+                <div className="flex items-center gap-4">
+                  <div className={`p-2 rounded-lg ${
+                    event.type === 'deposit' ? 'bg-emerald-500/10 text-emerald-400' :
+                    event.type === 'withdrawal' ? 'bg-rose-500/10 text-rose-400' :
+                    'bg-blue-500/10 text-blue-400'
+                  }`}>
+                    {event.type === 'deposit' ? <ArrowUpRight size={18} /> : 
+                     event.type === 'withdrawal' ? <ArrowDownRight size={18} /> : 
+                     <Activity size={18} />}
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">{event.description}</p>
+                    <p className="text-[10px] text-zinc-500">{new Date(event.timestamp).toLocaleString()}</p>
+                  </div>
+                </div>
+                <p className={`text-sm font-mono font-bold ${event.amount >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  {event.amount >= 0 ? '+' : ''}{event.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                </p>
+              </div>
+            ))}
+            {ledger.length === 0 && (
+              <div className="px-6 py-12 text-center text-zinc-500 italic">
+                No recent activity.
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
