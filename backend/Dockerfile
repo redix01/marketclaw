@@ -10,7 +10,7 @@ RUN composer install \
     --no-progress \
     --optimize-autoloader
 
-FROM php:8.3-cli-bookworm
+FROM php:8.4-cli-bookworm
 
 WORKDIR /var/www/html
 
