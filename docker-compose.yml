@@ -21,15 +21,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-
-  web:
-    build:
-      context: ./web
-    restart: unless-stopped
-    depends_on:
-      - backend
     ports:
-      - "8080:80"
+      - "8000:8000"
 
 volumes:
   postgres-data:
