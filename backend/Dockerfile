@@ -26,6 +26,7 @@ COPY . .
 COPY --from=vendor /app/vendor ./vendor
 
 RUN chmod +x docker/entrypoint.sh \
+    && rm -f bootstrap/cache/*.php \
     && mkdir -p storage/framework/{cache,sessions,testing,views} storage/logs bootstrap/cache \
     && chown -R www-data:www-data storage bootstrap/cache
 
