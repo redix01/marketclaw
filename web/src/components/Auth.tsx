@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AlertCircle, Bot, Loader2, LogIn, UserPlus } from 'lucide-react';
+import { AlertCircle, Bot, Eye, EyeOff, Loader2, LogIn, UserPlus } from 'lucide-react';
 import { authService } from '../services/authService';
 import { ApiError } from '../services/api';
 
@@ -13,6 +13,8 @@ export default function Auth({ onAuthenticated }: AuthProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [passwordConfirmation, setPasswordConfirmation] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showPasswordConfirmation, setShowPasswordConfirmation] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -104,25 +106,45 @@ export default function Auth({ onAuthenticated }: AuthProps) {
 
             <div>
               <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold mb-1.5 block">Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                required
-                className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-3 px-4 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-emerald-500/50 transition-all"
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  required
+                  className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-3 pl-4 pr-12 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-emerald-500/50 transition-all"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((value) => !value)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
             </div>
 
             {mode === 'register' && (
               <div>
                 <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold mb-1.5 block">Confirm Password</label>
-                <input
-                  type="password"
-                  value={passwordConfirmation}
-                  onChange={(event) => setPasswordConfirmation(event.target.value)}
-                  required
-                  className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-3 px-4 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-emerald-500/50 transition-all"
-                />
+                <div className="relative">
+                  <input
+                    type={showPasswordConfirmation ? 'text' : 'password'}
+                    value={passwordConfirmation}
+                    onChange={(event) => setPasswordConfirmation(event.target.value)}
+                    required
+                    className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-3 pl-4 pr-12 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-emerald-500/50 transition-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPasswordConfirmation((value) => !value)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors"
+                    aria-label={showPasswordConfirmation ? 'Hide password confirmation' : 'Show password confirmation'}
+                  >
+                    {showPasswordConfirmation ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
               </div>
             )}
 
