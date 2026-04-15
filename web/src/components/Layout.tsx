@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   Briefcase, 
@@ -26,16 +27,16 @@ function cn(...inputs: ClassValue[]) {
 interface LayoutProps {
   children: React.ReactNode;
   activeTab: string;
-  setActiveTab: (tab: string) => void;
+  basePath: string;
   user: any;
   account: any;
   isGuest?: boolean;
   onExitGuest?: () => void;
 }
 
-const SidebarItem = ({ icon: Icon, label, id, active, onClick }: any) => (
-  <button
-    onClick={() => onClick(id)}
+const SidebarItem = ({ icon: Icon, label, id, active, href }: any) => (
+  <Link
+    to={href}
     className={cn(
       "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group",
       active 
@@ -46,10 +47,10 @@ const SidebarItem = ({ icon: Icon, label, id, active, onClick }: any) => (
     <Icon size={20} className={cn(active ? "text-emerald-400" : "group-hover:scale-110 transition-transform")} />
     <span className="font-medium">{label}</span>
     {active && <ChevronRight size={16} className="ml-auto opacity-50" />}
-  </button>
+  </Link>
 );
 
-export default function Layout({ children, activeTab, setActiveTab, user, account, isGuest, onExitGuest }: LayoutProps) {
+export default function Layout({ children, activeTab, basePath, user, account, isGuest, onExitGuest }: LayoutProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -131,8 +132,8 @@ export default function Layout({ children, activeTab, setActiveTab, user, accoun
               <SidebarItem
                 key={item.id}
                 {...item}
+                href={`${basePath}/${item.id}`}
                 active={activeTab === item.id}
-                onClick={setActiveTab}
               />
             ))}
           </nav>

@@ -1,4 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
+import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { authService } from './services/authService';
 import { useTradingData } from './hooks/useTradingData';
 import Layout from './components/Layout';
 import Auth from './components/Auth';
@@ -11,17 +14,191 @@ import AgentLogs from './components/AgentLogs';
 import Wallet from './components/Wallet';
 import Settings from './components/Settings';
 import LandingPage from './components/LandingPage';
-import { motion, AnimatePresence } from 'motion/react';
-import { authService } from './services/authService';
+
+const APP_TABS = ['overview', 'portfolio', 'trade', 'orders', 'history', 'agents', 'logs', 'wallet', 'settings'] as const;
+type AppTab = (typeof APP_TABS)[number];
+
+function normalizeTab(tab?: string): AppTab {
+  return APP_TABS.includes((tab ?? '') as AppTab) ? (tab as AppTab) : 'overview';
+}
+
+function LoadingScreen() {
+  return (
+    <div className="min-h-screen bg-[#0A0A0B] flex items-center justify-center">
+      <div className="w-12 h-12 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin"></div>
+    </div>
+  );
+}
+
+function DashboardShell({
+  basePath,
+  user,
+  isGuest,
+  onExitGuest,
+}: {
+  basePath: '/app' | '/demo';
+  user: any;
+  isGuest: boolean;
+  onExitGuest: () => void;
+}) {
+  const { tab } = useParams();
+  const activeTab = normalizeTab(tab);
+  const { account, positions, orders, ledger, agents, logs } = useTradingData(user);
+
+  const renderContent = () => {
+    switch (activeTab) {
+      case 'overview':
+        return <Dashboard account={account} positions={positions} orders={orders} ledger={ledger} agents={agents} />;
+      case 'portfolio':
+        return <Portfolio account={account} positions={positions} />;
+      case 'trade':
+        return <Trade user={user} account={account} positions={positions} />;
+      case 'orders':
+      case 'history':
+        return <OrdersHistory orders={orders} ledger={ledger} />;
+      case 'agents':
+        return <Agents user={user} agents={agents} positions={positions} />;
+      case 'logs':
+        return <AgentLogs logs={logs} />;
+      case 'wallet':
+        return <Wallet user={user} account={account} ledger={ledger} />;
+      case 'settings':
+        return <Settings user={user} />;
+      default:
+        return <Dashboard account={account} positions={positions} orders={orders} ledger={ledger} agents={agents} />;
+    }
+  };
+
+  return (
+    <Layout
+      activeTab={activeTab}
+      basePath={basePath}
+      user={user}
+      account={account}
+      isGuest={isGuest}
+      onExitGuest={onExitGuest}
+    >
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={activeTab}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          transition={{ duration: 0.2 }}
+        >
+          {renderContent()}
+        </motion.div>
+      </AnimatePresence>
+    </Layout>
+  );
+}
+
+function AppRoutes({
+  user,
+  authReady,
+  setUser,
+  setIsGuest,
+}: {
+  user: any;
+  authReady: boolean;
+  setUser: (value: any) => void;
+  setIsGuest: (value: boolean) => void;
+}) {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  if (!authReady) {
+    return <LoadingScreen />;
+  }
+
+  const guestUser = {
+    uid: 'guest-user',
+    displayName: 'Guest Trader',
+    email: 'guest@openclaw.io',
+    photoURL: null,
+  };
+
+  return (
+    <Routes>
+      <Route
+        path="/"
+        element={
+          <LandingPage
+            user={user}
+            onLaunchApp={() => navigate(user ? '/app/overview' : '/auth')}
+            onViewDemo={() => {
+              setIsGuest(true);
+              navigate('/demo/overview');
+            }}
+          />
+        }
+      />
+      <Route
+        path="/auth"
+        element={
+          user ? (
+            <Navigate to="/app/overview" replace />
+          ) : (
+            <Auth
+              onAuthenticated={(session) => {
+                setUser({
+                  uid: String(session.user.id),
+                  displayName: session.user.name,
+                  email: session.user.email,
+                  photoURL: session.user.avatar_url ?? null,
+                });
+                navigate('/app/overview', { replace: true });
+              }}
+            />
+          )
+        }
+      />
+      <Route
+        path="/app"
+        element={user ? <Navigate to="/app/overview" replace /> : <Navigate to="/auth" replace state={{ from: location }} />}
+      />
+      <Route
+        path="/app/:tab"
+        element={
+          user ? (
+            <DashboardShell
+              basePath="/app"
+              user={user}
+              isGuest={false}
+              onExitGuest={() => {
+                setIsGuest(false);
+                navigate('/');
+              }}
+            />
+          ) : (
+            <Navigate to="/auth" replace state={{ from: location }} />
+          )
+        }
+      />
+      <Route path="/demo" element={<Navigate to="/demo/overview" replace />} />
+      <Route
+        path="/demo/:tab"
+        element={
+          <DashboardShell
+            basePath="/demo"
+            user={guestUser}
+            isGuest={true}
+            onExitGuest={() => {
+              setIsGuest(false);
+              navigate('/');
+            }}
+          />
+        }
+      />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+}
 
 export default function App() {
   const [user, setUser] = useState<any>(null);
   const [authReady, setAuthReady] = useState(false);
-  const [activeTab, setActiveTab] = useState('overview');
-  const [viewingApp, setViewingApp] = useState(false);
   const [isGuest, setIsGuest] = useState(false);
-  
-  const { account, positions, orders, ledger, agents, logs } = useTradingData(isGuest ? { uid: 'guest-user' } : user);
 
   useEffect(() => {
     let active = true;
@@ -30,7 +207,6 @@ export default function App() {
       if (!active) return;
 
       if (session) {
-        setIsGuest(false);
         setUser({
           uid: String(session.user.id),
           displayName: session.user.name,
@@ -49,100 +225,5 @@ export default function App() {
     };
   }, []);
 
-  if (!authReady) {
-    return (
-      <div className="min-h-screen bg-[#0A0A0B] flex items-center justify-center">
-        <div className="w-12 h-12 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin"></div>
-      </div>
-    );
-  }
-
-  // Show landing page if not explicitly viewing app/demo
-  if (!viewingApp && !isGuest) {
-    return (
-      <LandingPage 
-        user={user}
-        onLaunchApp={() => setViewingApp(true)} 
-        onViewDemo={() => {
-          setIsGuest(true);
-          setViewingApp(true);
-        }}
-      />
-    );
-  }
-
-  // Show Auth if trying to launch app but not logged in
-  if (!user && viewingApp && !isGuest) {
-    return (
-      <Auth
-        onAuthenticated={(session) => {
-          setUser({
-            uid: String(session.user.id),
-            displayName: session.user.name,
-            email: session.user.email,
-            photoURL: session.user.avatar_url ?? null,
-          });
-        }}
-      />
-    );
-  }
-
-  const guestUser = {
-    uid: 'guest-user',
-    displayName: 'Guest Trader',
-    email: 'guest@openclaw.io',
-    photoURL: null
-  };
-
-  const currentUser = user || (isGuest ? guestUser : null);
-
-  const renderContent = () => {
-    switch (activeTab) {
-      case 'overview':
-        return <Dashboard account={account} positions={positions} orders={orders} ledger={ledger} agents={agents} />;
-      case 'portfolio':
-        return <Portfolio account={account} positions={positions} />;
-      case 'trade':
-        return <Trade user={currentUser} account={account} positions={positions} />;
-      case 'orders':
-      case 'history':
-        return <OrdersHistory orders={orders} ledger={ledger} />;
-      case 'agents':
-        return <Agents user={currentUser} agents={agents} positions={positions} />;
-      case 'logs':
-        return <AgentLogs logs={logs} />;
-      case 'wallet':
-        return <Wallet user={currentUser} account={account} ledger={ledger} />;
-      case 'settings':
-        return <Settings user={currentUser} />;
-      default:
-        return <Dashboard account={account} positions={positions} orders={orders} ledger={ledger} agents={agents} />;
-    }
-  };
-
-  return (
-    <Layout 
-      activeTab={activeTab} 
-      setActiveTab={setActiveTab} 
-      user={currentUser} 
-      account={account}
-      isGuest={isGuest}
-      onExitGuest={() => {
-        setIsGuest(false);
-        setViewingApp(false);
-      }}
-    >
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={activeTab}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -10 }}
-          transition={{ duration: 0.2 }}
-        >
-          {renderContent()}
-        </motion.div>
-      </AnimatePresence>
-    </Layout>
-  );
+  return <AppRoutes user={user} authReady={authReady} setUser={setUser} setIsGuest={setIsGuest} />;
 }
