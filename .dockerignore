@@ -1,0 +1,11 @@
+.git
+.gitignore
+node_modules
+vendor
+.deploy
+backend/.env
+backend/vendor
+backend/node_modules
+backend/database/database.sqlite
+web/node_modules
+web/dist
