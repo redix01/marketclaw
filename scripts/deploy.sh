@@ -17,7 +17,7 @@ if [[ ! -f "${BACKEND_ENV}" ]]; then
 fi
 
 if ! grep -q '^APP_KEY=base64:' "${BACKEND_ENV}"; then
-  APP_KEY="base64:$(php -r 'echo base64_encode(random_bytes(32));')"
+  APP_KEY="base64:$(openssl rand -base64 32 | tr -d '\n')"
   if grep -q '^APP_KEY=' "${BACKEND_ENV}"; then
     sed -i.bak "s#^APP_KEY=.*#APP_KEY=${APP_KEY}#" "${BACKEND_ENV}"
     rm -f "${BACKEND_ENV}.bak"
