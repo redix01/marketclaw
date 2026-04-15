@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -22,8 +22,7 @@ import {
   Pie,
   Cell
 } from 'recharts';
-import { Account, Position, Order, LedgerEvent, Agent } from '../types';
-import { MOCK_SYMBOLS } from '../constants';
+import { Account, Position, Order, LedgerEvent, Agent, DashboardSnapshot } from '../types';
 
 interface DashboardProps {
   account: Account | null;
@@ -31,6 +30,7 @@ interface DashboardProps {
   orders: Order[];
   ledger: LedgerEvent[];
   agents: Agent[];
+  dashboard: DashboardSnapshot | null;
 }
 
 const StatCard = ({ title, value, subValue, icon: Icon, trend }: any) => (
@@ -52,34 +52,48 @@ const StatCard = ({ title, value, subValue, icon: Icon, trend }: any) => (
   </div>
 );
 
-export default function Dashboard({ account, positions, orders, ledger, agents }: DashboardProps) {
-  // Calculate total equity
-  const holdingsValue = positions.reduce((acc, pos) => {
-    const symbolInfo = MOCK_SYMBOLS.find(s => s.symbol === pos.symbol);
-    return acc + (pos.quantity * (symbolInfo?.price || pos.averageEntryPrice));
-  }, 0);
+export default function Dashboard({ account, positions, orders, ledger, agents, dashboard }: DashboardProps) {
+  const [range, setRange] = useState<'1D' | '1W' | '1M' | 'ALL'>('1W');
 
-  const totalEquity = (account?.cashBalance || 0) + holdingsValue;
-  const unrealizedPL = positions.reduce((acc, pos) => {
-    const symbolInfo = MOCK_SYMBOLS.find(s => s.symbol === pos.symbol);
-    const currentVal = pos.quantity * (symbolInfo?.price || pos.averageEntryPrice);
-    const costBasis = pos.quantity * pos.averageEntryPrice;
-    return acc + (currentVal - costBasis);
-  }, 0);
+  const holdingsValue = dashboard?.summary.holdingsValue
+    ?? positions.reduce((acc, pos) => acc + (pos.marketValue ?? pos.quantity * (pos.currentPrice ?? pos.averageEntryPrice)), 0);
+  const totalEquity = dashboard?.summary.totalEquity ?? ((account?.cashBalance || 0) + holdingsValue);
+  const unrealizedPL = dashboard?.summary.unrealizedPL
+    ?? positions.reduce((acc, pos) => acc + (pos.unrealizedPL ?? ((pos.currentPrice ?? pos.averageEntryPrice) - pos.averageEntryPrice) * pos.quantity), 0);
 
-  const chartData = [
-    { name: 'Mon', value: totalEquity * 0.92 },
-    { name: 'Tue', value: totalEquity * 0.95 },
-    { name: 'Wed', value: totalEquity * 0.94 },
-    { name: 'Thu', value: totalEquity * 0.98 },
-    { name: 'Fri', value: totalEquity },
-  ];
+  const chartData = useMemo(() => {
+    const points = dashboard?.equityCurve ?? [];
 
-  const allocationData = [
-    { name: 'Cash', value: account?.cashBalance || 0, color: '#10b981' },
-    { name: 'Stocks', value: holdingsValue * 0.6, color: '#3b82f6' },
-    { name: 'Crypto', value: holdingsValue * 0.4, color: '#f59e0b' },
-  ];
+    if (points.length === 0) {
+      return [{ name: 'Now', value: totalEquity }];
+    }
+
+    const sliceSize = range === '1D' ? 2 : range === '1W' ? 7 : range === '1M' ? 30 : points.length;
+
+    return points.slice(-sliceSize).map((point) => ({
+      name: point.label,
+      value: point.value,
+    }));
+  }, [dashboard?.equityCurve, range, totalEquity]);
+
+  const allocationData = useMemo(() => {
+    if (dashboard?.assetAllocation?.length) {
+      return dashboard.assetAllocation;
+    }
+
+    const stockValue = positions
+      .filter((pos) => pos.assetType === 'stock')
+      .reduce((acc, pos) => acc + (pos.marketValue ?? pos.quantity * (pos.currentPrice ?? pos.averageEntryPrice)), 0);
+    const cryptoValue = positions
+      .filter((pos) => pos.assetType === 'crypto')
+      .reduce((acc, pos) => acc + (pos.marketValue ?? pos.quantity * (pos.currentPrice ?? pos.averageEntryPrice)), 0);
+
+    return [
+      { name: 'Cash', value: account?.cashBalance || 0, color: '#10b981' },
+      { name: 'Stock', value: stockValue, color: '#3b82f6' },
+      { name: 'Crypto', value: cryptoValue, color: '#f59e0b' },
+    ].filter((item) => item.value > 0);
+  }, [account?.cashBalance, dashboard?.assetAllocation, positions]);
 
   return (
     <div className="space-y-6">
@@ -117,8 +131,12 @@ export default function Dashboard({ account, positions, orders, ledger, agents }
           <div className="flex justify-between items-center mb-6">
             <h3 className="text-lg font-bold">Equity Curve</h3>
             <div className="flex gap-2">
-              {['1D', '1W', '1M', 'ALL'].map(t => (
-                <button key={t} className={`px-3 py-1 text-xs font-bold rounded-lg border transition-all ${t === '1W' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'border-zinc-800 text-zinc-500 hover:border-zinc-700'}`}>
+              {(['1D', '1W', '1M', 'ALL'] as const).map(t => (
+                <button
+                  key={t}
+                  onClick={() => setRange(t)}
+                  className={`px-3 py-1 text-xs font-bold rounded-lg border transition-all ${t === range ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'border-zinc-800 text-zinc-500 hover:border-zinc-700'}`}
+                >
                   {t}
                 </button>
               ))}
@@ -135,7 +153,7 @@ export default function Dashboard({ account, positions, orders, ledger, agents }
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" vertical={false} />
                 <XAxis dataKey="name" stroke="#6b7280" fontSize={12} tickLine={false} axisLine={false} />
-                <YAxis stroke="#6b7280" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(v) => `$${v/1000}k`} />
+                <YAxis stroke="#6b7280" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
                 <Tooltip 
                   contentStyle={{ backgroundColor: '#0F0F11', border: '1px solid #374151', borderRadius: '12px' }}
                   itemStyle={{ color: '#10b981' }}
@@ -203,9 +221,8 @@ export default function Dashboard({ account, positions, orders, ledger, agents }
               </thead>
               <tbody className="divide-y divide-zinc-800/50">
                 {positions.slice(0, 5).map((pos) => {
-                  const symbolInfo = MOCK_SYMBOLS.find(s => s.symbol === pos.symbol);
-                  const currentPrice = symbolInfo?.price || pos.averageEntryPrice;
-                  const pl = (currentPrice - pos.averageEntryPrice) * pos.quantity;
+                  const currentPrice = pos.currentPrice || pos.averageEntryPrice;
+                  const pl = pos.unrealizedPL ?? ((currentPrice - pos.averageEntryPrice) * pos.quantity);
                   const plPercent = ((currentPrice / pos.averageEntryPrice) - 1) * 100;
 
                   return (

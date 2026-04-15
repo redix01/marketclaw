@@ -30,6 +30,9 @@ export interface Position {
   assetType: AssetType;
   quantity: number;
   averageEntryPrice: number;
+  currentPrice?: number;
+  marketValue?: number;
+  unrealizedPL?: number;
   updatedAt: string;
 }
 
@@ -90,4 +93,30 @@ export interface SymbolInfo {
   change: number;
   changePercent: number;
   type: AssetType;
+}
+
+export interface EquityPoint {
+  label: string;
+  value: number;
+  timestamp: string;
+}
+
+export interface AllocationPoint {
+  name: string;
+  value: number;
+  color: string;
+}
+
+export interface DashboardSummary {
+  holdingsValue: number;
+  totalEquity: number;
+  unrealizedPL: number;
+  openPositionsCount: number;
+  recentOrdersCount: number;
+}
+
+export interface DashboardSnapshot {
+  summary: DashboardSummary;
+  equityCurve: EquityPoint[];
+  assetAllocation: AllocationPoint[];
 }

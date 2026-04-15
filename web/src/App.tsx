@@ -43,12 +43,12 @@ function DashboardShell({
 }) {
   const { tab } = useParams();
   const activeTab = normalizeTab(tab);
-  const { account, positions, orders, ledger, agents, logs } = useTradingData(user);
+  const { account, positions, orders, ledger, dashboard, agents, logs } = useTradingData(user);
 
   const renderContent = () => {
     switch (activeTab) {
       case 'overview':
-        return <Dashboard account={account} positions={positions} orders={orders} ledger={ledger} agents={agents} />;
+        return <Dashboard account={account} positions={positions} orders={orders} ledger={ledger} agents={agents} dashboard={dashboard} />;
       case 'portfolio':
         return <Portfolio account={account} positions={positions} />;
       case 'trade':
@@ -65,7 +65,7 @@ function DashboardShell({
       case 'settings':
         return <Settings user={user} />;
       default:
-        return <Dashboard account={account} positions={positions} orders={orders} ledger={ledger} agents={agents} />;
+        return <Dashboard account={account} positions={positions} orders={orders} ledger={ledger} agents={agents} dashboard={dashboard} />;
     }
   };
 

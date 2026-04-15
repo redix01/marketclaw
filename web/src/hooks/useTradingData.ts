@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { apiFetch } from '../services/api';
-import { Account, Agent, AgentLog, LedgerEvent, Order, Position } from '../types';
+import { Account, Agent, AgentLog, DashboardSnapshot, LedgerEvent, Order, Position } from '../types';
 
 function mapAccount(account: any): Account {
   return {
@@ -20,6 +20,9 @@ function mapPosition(position: any): Position {
     assetType: position.asset_type,
     quantity: position.quantity,
     averageEntryPrice: position.average_entry_price,
+    currentPrice: position.current_price,
+    marketValue: position.market_value,
+    unrealizedPL: position.unrealized_pl,
     updatedAt: position.updated_at,
   };
 }
@@ -53,11 +56,34 @@ function mapLedger(entry: any): LedgerEvent {
   };
 }
 
+function mapDashboard(snapshot: any): DashboardSnapshot {
+  return {
+    summary: {
+      holdingsValue: snapshot.summary.holdings_value,
+      totalEquity: snapshot.summary.total_equity,
+      unrealizedPL: snapshot.summary.unrealized_pl,
+      openPositionsCount: snapshot.summary.open_positions_count,
+      recentOrdersCount: snapshot.summary.recent_orders_count,
+    },
+    equityCurve: (snapshot.equity_curve ?? []).map((point: any) => ({
+      label: point.label,
+      value: point.value,
+      timestamp: point.timestamp,
+    })),
+    assetAllocation: (snapshot.asset_allocation ?? []).map((point: any) => ({
+      name: point.name,
+      value: point.value,
+      color: point.color,
+    })),
+  };
+}
+
 export function useTradingData(user: any) {
   const [account, setAccount] = useState<Account | null>(null);
   const [positions, setPositions] = useState<Position[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [ledger, setLedger] = useState<LedgerEvent[]>([]);
+  const [dashboard, setDashboard] = useState<DashboardSnapshot | null>(null);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [logs, setLogs] = useState<AgentLog[]>([]);
   const [loading, setLoading] = useState(true);
@@ -84,6 +110,27 @@ export function useTradingData(user: any) {
       ]);
       setOrders([]);
       setLedger([]);
+      setDashboard({
+        summary: {
+          holdingsValue: 24000,
+          totalEquity: 49000,
+          unrealizedPL: 3500,
+          openPositionsCount: 2,
+          recentOrdersCount: 0,
+        },
+        equityCurve: [
+          { label: 'Mon', value: 42000, timestamp: new Date().toISOString() },
+          { label: 'Tue', value: 43800, timestamp: new Date().toISOString() },
+          { label: 'Wed', value: 45100, timestamp: new Date().toISOString() },
+          { label: 'Thu', value: 46900, timestamp: new Date().toISOString() },
+          { label: 'Fri', value: 49000, timestamp: new Date().toISOString() },
+        ],
+        assetAllocation: [
+          { name: 'Cash', value: 25000, color: '#10b981' },
+          { name: 'Stock', value: 1859.2, color: '#3b82f6' },
+          { name: 'Crypto', value: 34216.06, color: '#f59e0b' },
+        ],
+      });
       setAgents([
         {
           id: 'g_bot_1',
@@ -109,7 +156,8 @@ export function useTradingData(user: any) {
       setLoading(true);
 
       try {
-        const [accountResponse, positionsResponse, ordersResponse, ledgerResponse] = await Promise.all([
+        const [dashboardResponse, accountResponse, positionsResponse, ordersResponse, ledgerResponse] = await Promise.all([
+          apiFetch<{ data: any }>(`/users/${uid}/dashboard`),
           apiFetch<{ data: any }>(`/users/${uid}/account`),
           apiFetch<{ data: any[] }>(`/users/${uid}/positions`),
           apiFetch<{ data: any[] }>(`/users/${uid}/orders`),
@@ -118,6 +166,7 @@ export function useTradingData(user: any) {
 
         if (cancelled) return;
 
+        setDashboard(mapDashboard(dashboardResponse.data));
         setAccount(mapAccount(accountResponse.data));
         setPositions(positionsResponse.data.map(mapPosition));
         setOrders(ordersResponse.data.map(mapOrder));
@@ -145,5 +194,5 @@ export function useTradingData(user: any) {
     };
   }, [user]);
 
-  return { account, positions, orders, ledger, agents, logs, loading };
+  return { account, positions, orders, ledger, dashboard, agents, logs, loading };
 }
