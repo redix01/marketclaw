@@ -1,7 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { onAuthStateChanged } from 'firebase/auth';
-import { auth, db } from './firebase';
-import { tradingService } from './services/tradingService';
 import { useTradingData } from './hooks/useTradingData';
 import Layout from './components/Layout';
 import Auth from './components/Auth';
@@ -15,7 +12,7 @@ import Wallet from './components/Wallet';
 import Settings from './components/Settings';
 import LandingPage from './components/LandingPage';
 import { motion, AnimatePresence } from 'motion/react';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { authService } from './services/authService';
 
 export default function App() {
   const [user, setUser] = useState<any>(null);
@@ -24,38 +21,32 @@ export default function App() {
   const [viewingApp, setViewingApp] = useState(false);
   const [isGuest, setIsGuest] = useState(false);
   
-  const { account, positions, orders, ledger, agents, logs, loading: dataLoading } = useTradingData(isGuest ? { uid: 'guest-user' } : user);
+  const { account, positions, orders, ledger, agents, logs } = useTradingData(isGuest ? { uid: 'guest-user' } : user);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
+    let active = true;
+
+    void authService.restore().then((session) => {
+      if (!active) return;
+
+      if (session) {
         setIsGuest(false);
-        // Check if user profile exists
-        const userRef = doc(db, 'users', user.uid);
-        const userSnap = await getDoc(userRef);
-        
-        if (!userSnap.exists()) {
-          // Create user profile
-          await setDoc(userRef, {
-            uid: user.uid,
-            email: user.email,
-            displayName: user.displayName,
-            photoURL: user.photoURL,
-            createdAt: new Date().toISOString(),
-            onboardingCompleted: false
-          });
-          
-          // Initialize paper account
-          await tradingService.createAccount(user.uid, 10000);
-        }
-        setUser(user);
+        setUser({
+          uid: String(session.user.id),
+          displayName: session.user.name,
+          email: session.user.email,
+          photoURL: session.user.avatar_url ?? null,
+        });
       } else {
         setUser(null);
       }
+
       setAuthReady(true);
     });
 
-    return () => unsubscribe();
+    return () => {
+      active = false;
+    };
   }, []);
 
   if (!authReady) {
@@ -82,7 +73,18 @@ export default function App() {
 
   // Show Auth if trying to launch app but not logged in
   if (!user && viewingApp && !isGuest) {
-    return <Auth />;
+    return (
+      <Auth
+        onAuthenticated={(session) => {
+          setUser({
+            uid: String(session.user.id),
+            displayName: session.user.name,
+            email: session.user.email,
+            photoURL: session.user.avatar_url ?? null,
+          });
+        }}
+      />
+    );
   }
 
   const guestUser = {

@@ -1,21 +1,57 @@
-import { useState, useEffect } from 'react';
-import { 
-  collection, 
-  query, 
-  where, 
-  orderBy, 
-  onSnapshot, 
-  doc 
-} from 'firebase/firestore';
-import { db, auth } from '../firebase';
-import { 
-  Account, 
-  Position, 
-  Order, 
-  LedgerEvent, 
-  Agent, 
-  AgentLog 
-} from '../types';
+import { useEffect, useState } from 'react';
+import { apiFetch } from '../services/api';
+import { Account, Agent, AgentLog, LedgerEvent, Order, Position } from '../types';
+
+function mapAccount(account: any): Account {
+  return {
+    uid: String(account.user_id),
+    cashBalance: account.cash_balance,
+    totalDeposits: account.total_deposits,
+    totalWithdrawals: account.total_withdrawals,
+    updatedAt: account.updated_at,
+  };
+}
+
+function mapPosition(position: any): Position {
+  return {
+    id: String(position.id),
+    uid: '',
+    symbol: position.symbol,
+    assetType: position.asset_type,
+    quantity: position.quantity,
+    averageEntryPrice: position.average_entry_price,
+    updatedAt: position.updated_at,
+  };
+}
+
+function mapOrder(order: any): Order {
+  return {
+    id: String(order.id),
+    uid: '',
+    symbol: order.symbol,
+    side: order.side,
+    quantity: order.quantity,
+    orderType: order.order_type,
+    status: order.status,
+    source: order.source,
+    agentId: order.agent_id ? String(order.agent_id) : undefined,
+    createdAt: order.created_at || order.submitted_at,
+    filledAt: order.filled_at || undefined,
+    fillPrice: order.fill_price ?? undefined,
+  };
+}
+
+function mapLedger(entry: any): LedgerEvent {
+  return {
+    id: String(entry.id),
+    uid: '',
+    type: entry.type,
+    amount: entry.amount,
+    description: entry.description,
+    timestamp: entry.created_at,
+    referenceId: entry.reference_id ? String(entry.reference_id) : undefined,
+  };
+}
 
 export function useTradingData(user: any) {
   const [account, setAccount] = useState<Account | null>(null);
@@ -40,74 +76,72 @@ export function useTradingData(user: any) {
         cashBalance: 25000,
         totalDeposits: 25000,
         totalWithdrawals: 0,
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
       });
       setPositions([
         { id: 'g_1', uid: 'guest-user', symbol: 'AAPL', quantity: 10, averageEntryPrice: 150, assetType: 'stock', updatedAt: new Date().toISOString() },
-        { id: 'g_2', uid: 'guest-user', symbol: 'BTC', quantity: 0.5, averageEntryPrice: 45000, assetType: 'crypto', updatedAt: new Date().toISOString() }
+        { id: 'g_2', uid: 'guest-user', symbol: 'BTC', quantity: 0.5, averageEntryPrice: 45000, assetType: 'crypto', updatedAt: new Date().toISOString() },
       ]);
+      setOrders([]);
+      setLedger([]);
       setAgents([
-        { 
-          id: 'g_bot_1', 
-          uid: 'guest-user', 
-          name: 'Demo Momentum Bot', 
-          template: 'aggressive_momentum', 
-          status: 'running', 
-          symbols: ['AAPL', 'TSLA', 'BTC'], 
-          maxAllocation: 20, 
-          maxPositionSize: 5000, 
+        {
+          id: 'g_bot_1',
+          uid: 'guest-user',
+          name: 'Demo Momentum Bot',
+          template: 'aggressive_momentum',
+          status: 'running',
+          symbols: ['AAPL', 'TSLA', 'BTC'],
+          maxAllocation: 20,
+          maxPositionSize: 5000,
           tickFrequency: '1h',
-          createdAt: new Date().toISOString()
-        }
+          createdAt: new Date().toISOString(),
+        },
       ]);
+      setLogs([]);
       setLoading(false);
       return;
     }
 
-    // Listen to Account
-    const unsubAccount = onSnapshot(doc(db, 'accounts', uid), (doc) => {
-      if (doc.exists()) setAccount(doc.data() as Account);
-    });
+    let cancelled = false;
 
-    // Listen to Positions
-    const qPositions = query(collection(db, 'positions'), where('uid', '==', uid));
-    const unsubPositions = onSnapshot(qPositions, (snap) => {
-      setPositions(snap.docs.map(d => d.data() as Position));
-    });
+    const load = async () => {
+      setLoading(true);
 
-    // Listen to Orders
-    const qOrders = query(collection(db, 'orders'), where('uid', '==', uid), orderBy('createdAt', 'desc'));
-    const unsubOrders = onSnapshot(qOrders, (snap) => {
-      setOrders(snap.docs.map(d => d.data() as Order));
-    });
+      try {
+        const [accountResponse, positionsResponse, ordersResponse, ledgerResponse] = await Promise.all([
+          apiFetch<{ data: any }>(`/users/${uid}/account`),
+          apiFetch<{ data: any[] }>(`/users/${uid}/positions`),
+          apiFetch<{ data: any[] }>(`/users/${uid}/orders`),
+          apiFetch<{ data: any[] }>(`/users/${uid}/ledger`),
+        ]);
 
-    // Listen to Ledger
-    const qLedger = query(collection(db, 'ledger'), where('uid', '==', uid), orderBy('timestamp', 'desc'));
-    const unsubLedger = onSnapshot(qLedger, (snap) => {
-      setLedger(snap.docs.map(d => d.data() as LedgerEvent));
-    });
+        if (cancelled) return;
 
-    // Listen to Agents
-    const qAgents = query(collection(db, 'agents'), where('uid', '==', uid));
-    const unsubAgents = onSnapshot(qAgents, (snap) => {
-      setAgents(snap.docs.map(d => d.data() as Agent));
-    });
+        setAccount(mapAccount(accountResponse.data));
+        setPositions(positionsResponse.data.map(mapPosition));
+        setOrders(ordersResponse.data.map(mapOrder));
+        setLedger(ledgerResponse.data.map(mapLedger));
+        setAgents([]);
+        setLogs([]);
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
 
-    // Listen to Logs
-    const qLogs = query(collection(db, 'agentLogs'), where('uid', '==', uid), orderBy('timestamp', 'desc'));
-    const unsubLogs = onSnapshot(qLogs, (snap) => {
-      setLogs(snap.docs.map(d => d.data() as AgentLog));
-    });
+    void load();
 
-    setLoading(false);
+    const handleRefresh = () => {
+      void load();
+    };
+
+    window.addEventListener('marketclaw:data-changed', handleRefresh);
 
     return () => {
-      unsubAccount();
-      unsubPositions();
-      unsubOrders();
-      unsubLedger();
-      unsubAgents();
-      unsubLogs();
+      cancelled = true;
+      window.removeEventListener('marketclaw:data-changed', handleRefresh);
     };
   }, [user]);
 

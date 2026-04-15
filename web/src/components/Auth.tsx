@@ -1,26 +1,40 @@
 import React, { useState } from 'react';
-import { Bot, LogIn, Github, Mail, AlertCircle, Loader2 } from 'lucide-react';
-import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
-import { auth } from '../firebase';
+import { AlertCircle, Bot, Loader2, LogIn, UserPlus } from 'lucide-react';
+import { authService } from '../services/authService';
+import { ApiError } from '../services/api';
 
-export default function Auth() {
+interface AuthProps {
+  onAuthenticated: (session: { user: { id: number; name: string; email: string; avatar_url?: string | null } }) => void;
+}
+
+export default function Auth({ onAuthenticated }: AuthProps) {
+  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [passwordConfirmation, setPasswordConfirmation] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleGoogleLogin = async () => {
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
     setLoading(true);
     setError(null);
-    const provider = new GoogleAuthProvider();
+
     try {
-      await signInWithPopup(auth, provider);
-    } catch (err: any) {
-      console.error("Login failed:", err);
-      if (err.code === 'auth/popup-closed-by-user') {
-        setError("Login was cancelled. Please try again.");
-      } else if (err.code === 'auth/popup-blocked') {
-        setError("The login popup was blocked by your browser. Please allow popups for this site.");
+      const session = mode === 'login'
+        ? await authService.login(email, password)
+        : await authService.register(name, email, password, passwordConfirmation);
+
+      onAuthenticated(session);
+    } catch (err) {
+      if (err instanceof ApiError && typeof err.payload === 'object' && err.payload && 'errors' in err.payload) {
+        const firstError = Object.values((err.payload as any).errors)[0];
+        setError(Array.isArray(firstError) ? firstError[0] : err.message);
+      } else if (err instanceof Error) {
+        setError(err.message);
       } else {
-        setError("An error occurred during login. Please try again.");
+        setError('Authentication failed.');
       }
     } finally {
       setLoading(false);
@@ -39,6 +53,23 @@ export default function Auth() {
         </div>
 
         <div className="bg-[#0F0F11] border border-zinc-800/50 rounded-3xl p-8 shadow-2xl">
+          <div className="flex p-1 bg-zinc-900 rounded-xl mb-6">
+            <button
+              type="button"
+              onClick={() => setMode('login')}
+              className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all ${mode === 'login' ? 'bg-emerald-500 text-black' : 'text-zinc-500 hover:text-zinc-300'}`}
+            >
+              Login
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode('register')}
+              className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all ${mode === 'register' ? 'bg-emerald-500 text-black' : 'text-zinc-500 hover:text-zinc-300'}`}
+            >
+              Register
+            </button>
+          </div>
+
           {error && (
             <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-start gap-3 text-red-400 text-sm">
               <AlertCircle size={18} className="shrink-0 mt-0.5" />
@@ -46,28 +77,64 @@ export default function Auth() {
             </div>
           )}
 
-          <div className="space-y-4">
-            <button 
-              onClick={handleGoogleLogin}
+          <form className="space-y-4" onSubmit={submit}>
+            {mode === 'register' && (
+              <div>
+                <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold mb-1.5 block">Full Name</label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  required
+                  className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-emerald-500/50 transition-all"
+                />
+              </div>
+            )}
+
+            <div>
+              <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold mb-1.5 block">Email Address</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                required
+                className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-emerald-500/50 transition-all"
+              />
+            </div>
+
+            <div>
+              <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold mb-1.5 block">Password</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                required
+                className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-emerald-500/50 transition-all"
+              />
+            </div>
+
+            {mode === 'register' && (
+              <div>
+                <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold mb-1.5 block">Confirm Password</label>
+                <input
+                  type="password"
+                  value={passwordConfirmation}
+                  onChange={(event) => setPasswordConfirmation(event.target.value)}
+                  required
+                  className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-emerald-500/50 transition-all"
+                />
+              </div>
+            )}
+
+            <button
+              type="submit"
               disabled={loading}
               className="w-full flex items-center justify-center gap-3 bg-white text-black py-3.5 rounded-xl font-bold hover:bg-zinc-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? (
-                <Loader2 size={20} className="animate-spin" />
-              ) : (
-                <Mail size={20} />
-              )}
-              {loading ? 'Connecting...' : 'Continue with Google'}
+              {loading ? <Loader2 size={20} className="animate-spin" /> : mode === 'login' ? <LogIn size={18} /> : <UserPlus size={18} />}
+              {loading ? 'Please wait...' : mode === 'login' ? 'Login to Dashboard' : 'Create Account'}
             </button>
-            
-            <button 
-              disabled={loading}
-              className="w-full flex items-center justify-center gap-3 bg-zinc-800 text-white py-3.5 rounded-xl font-bold hover:bg-zinc-700 transition-all border border-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Github size={20} />
-              Continue with GitHub
-            </button>
-          </div>
+          </form>
 
           <div className="mt-8 pt-8 border-t border-zinc-800/50">
             <p className="text-[10px] text-center text-zinc-500 uppercase tracking-widest font-bold mb-4">Simulation Only</p>
@@ -76,10 +143,6 @@ export default function Auth() {
             </p>
           </div>
         </div>
-
-        <p className="mt-8 text-center text-xs text-zinc-500">
-          Don't have an account? <span className="text-emerald-400 font-bold cursor-pointer hover:underline">Sign up for free</span>
-        </p>
       </div>
     </div>
   );
