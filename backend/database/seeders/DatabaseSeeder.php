@@ -10,6 +10,7 @@ class DatabaseSeeder extends Seeder
     {
         $this->call([
             SymbolSeeder::class,
+            MarketQuoteSeeder::class,
         ]);
     }
 }
