@@ -86,7 +86,7 @@ export default function Auth({ onAuthenticated }: AuthProps) {
                   value={name}
                   onChange={(event) => setName(event.target.value)}
                   required
-                  className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-emerald-500/50 transition-all"
+                  className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-3 px-4 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-emerald-500/50 transition-all"
                 />
               </div>
             )}
@@ -98,7 +98,7 @@ export default function Auth({ onAuthenticated }: AuthProps) {
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 required
-                className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-emerald-500/50 transition-all"
+                className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-3 px-4 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-emerald-500/50 transition-all"
               />
             </div>
 
@@ -109,7 +109,7 @@ export default function Auth({ onAuthenticated }: AuthProps) {
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 required
-                className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-emerald-500/50 transition-all"
+                className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-3 px-4 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-emerald-500/50 transition-all"
               />
             </div>
 
@@ -121,7 +121,7 @@ export default function Auth({ onAuthenticated }: AuthProps) {
                   value={passwordConfirmation}
                   onChange={(event) => setPasswordConfirmation(event.target.value)}
                   required
-                  className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-emerald-500/50 transition-all"
+                  className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-3 px-4 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-emerald-500/50 transition-all"
                 />
               </div>
             )}
