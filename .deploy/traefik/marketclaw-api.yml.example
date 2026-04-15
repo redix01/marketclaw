@@ -1,0 +1,38 @@
+http:
+  routers:
+    marketclaw-api-router-sslip:
+      rule: Host(`marketclaw-api.95.217.130.102.sslip.io`)
+      service: marketclaw-api-service
+      middlewares:
+        - redirect-to-https
+      entryPoints:
+        - web
+    marketclaw-api-router-sslip-secure:
+      rule: Host(`marketclaw-api.95.217.130.102.sslip.io`)
+      service: marketclaw-api-service
+      middlewares: []
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: letsencrypt
+    marketclaw-api-router-ebus:
+      rule: Host(`api.ebus.live`)
+      service: marketclaw-api-service
+      middlewares:
+        - redirect-to-https
+      entryPoints:
+        - web
+    marketclaw-api-router-ebus-secure:
+      rule: Host(`api.ebus.live`)
+      service: marketclaw-api-service
+      middlewares: []
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: letsencrypt
+  services:
+    marketclaw-api-service:
+      loadBalancer:
+        servers:
+          - url: http://marketclaw-backend-1:8000
+        passHostHeader: true

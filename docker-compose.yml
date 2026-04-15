@@ -23,6 +23,13 @@ services:
         condition: service_healthy
     ports:
       - "8001:8000"
+    networks:
+      - default
+      - dokploy-network
 
 volumes:
   postgres-data:
+
+networks:
+  dokploy-network:
+    external: true
