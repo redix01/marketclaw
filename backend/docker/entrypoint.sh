@@ -47,9 +47,11 @@ if [ "${RUN_MIGRATIONS:-true}" = "true" ]; then
 
   php artisan migrate --force
 
-  if [ "${RUN_SEEDERS:-true}" = "true" ]; then
+if [ "${RUN_SEEDERS:-true}" = "true" ]; then
     php artisan db:seed --force
   fi
 fi
+
+php artisan schedule:work >/tmp/marketclaw-schedule.log 2>&1 &
 
 exec php artisan serve --host=0.0.0.0 --port=8000

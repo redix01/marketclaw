@@ -22,6 +22,8 @@ class SymbolSeeder extends Seeder
         ];
 
         foreach ($symbols as $symbol) {
+            $isStock = $symbol['asset_type'] === 'stock';
+
             Symbol::updateOrCreate(
                 ['ticker' => $symbol['ticker']],
                 [
@@ -29,7 +31,7 @@ class SymbolSeeder extends Seeder
                     'asset_type' => $symbol['asset_type'],
                     'is_active' => true,
                     'tradeable' => true,
-                    'price_source' => 'seed',
+                    'price_source' => $isStock ? 'finnhub' : 'seed',
                 ],
             );
         }

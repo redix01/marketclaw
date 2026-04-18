@@ -14,8 +14,8 @@ type SymbolRecord = {
 
 let cachedSymbols: SymbolRecord[] | null = null;
 
-async function getSymbols() {
-  if (cachedSymbols) {
+async function fetchSymbols(forceRefresh = false) {
+  if (cachedSymbols && !forceRefresh) {
     return cachedSymbols;
   }
 
@@ -45,8 +45,13 @@ export const tradingService = {
     }
   },
 
-  async getSymbols() {
-    return getSymbols();
+  async getSymbols(forceRefresh = false) {
+    return fetchSymbols(forceRefresh);
+  },
+
+  async refreshSymbols() {
+    cachedSymbols = null;
+    return fetchSymbols(true);
   },
 
   async getAccount(uid: string): Promise<Account | null> {
@@ -104,7 +109,7 @@ export const tradingService = {
   async placeOrder(uid: string, symbol: string, side: OrderSide, quantity: number, price: number, _assetType: AssetType) {
     await this.checkGuest(uid);
 
-    const symbols = await getSymbols();
+    const symbols = await fetchSymbols();
     const selectedSymbol = symbols.find((entry) => entry.symbol === symbol);
 
     if (!selectedSymbol) {

@@ -1,54 +1,38 @@
 import React, { useEffect, useState } from 'react';
 import { Search, TrendingUp, TrendingDown, Info, AlertCircle } from 'lucide-react';
 import { MOCK_SYMBOLS } from '../constants';
-import { tradingService } from '../services/tradingService';
 import { Account, Position, SymbolInfo } from '../types';
 
 interface TradeProps {
   user: any;
   account: Account | null;
   positions: Position[];
+  symbols: SymbolInfo[];
 }
 
-export default function Trade({ user, account, positions }: TradeProps) {
+export default function Trade({ user, account, positions, symbols }: TradeProps) {
   const [search, setSearch] = useState('');
-  const [symbols, setSymbols] = useState<SymbolInfo[]>(MOCK_SYMBOLS);
-  const [selectedSymbol, setSelectedSymbol] = useState(MOCK_SYMBOLS[0]);
+  const [selectedSymbolId, setSelectedSymbolId] = useState(MOCK_SYMBOLS[0].symbol);
   const [side, setSide] = useState<'buy' | 'sell'>('buy');
   const [quantity, setQuantity] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
+  const liveSymbols = symbols.length > 0 ? symbols : MOCK_SYMBOLS;
+  const selectedSymbol = liveSymbols.find((symbol) => symbol.symbol === selectedSymbolId) || liveSymbols[0];
+
   useEffect(() => {
-    let active = true;
+    if (liveSymbols.length === 0) {
+      return;
+    }
 
-    void tradingService.getSymbols().then((response) => {
-      if (!active || response.length === 0) return;
+    if (!liveSymbols.some((symbol) => symbol.symbol === selectedSymbolId)) {
+      setSelectedSymbolId(liveSymbols[0].symbol);
+    }
+  }, [liveSymbols, selectedSymbolId]);
 
-      const normalized = response
-        .filter((symbol) => symbol.price !== null)
-        .map((symbol) => ({
-          symbol: symbol.symbol,
-          name: symbol.name,
-          price: symbol.price ?? 0,
-          change: symbol.change,
-          changePercent: symbol.changePercent,
-          type: symbol.type,
-        }));
-
-      if (normalized.length === 0) return;
-
-      setSymbols(normalized);
-      setSelectedSymbol((current) => normalized.find((symbol) => symbol.symbol === current.symbol) || normalized[0]);
-    });
-
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  const filteredSymbols = symbols.filter(s => 
+  const filteredSymbols = liveSymbols.filter(s => 
     s.symbol.toLowerCase().includes(search.toLowerCase()) || 
     s.name.toLowerCase().includes(search.toLowerCase())
   );
@@ -103,7 +87,7 @@ export default function Trade({ user, account, positions }: TradeProps) {
             {filteredSymbols.map((s) => (
               <button
                 key={s.symbol}
-                onClick={() => setSelectedSymbol(s)}
+                onClick={() => setSelectedSymbolId(s.symbol)}
                 className={`p-3 rounded-xl border text-left transition-all flex items-center justify-between group ${
                   selectedSymbol.symbol === s.symbol 
                     ? 'bg-emerald-500/5 border-emerald-500/30 ring-1 ring-emerald-500/30' 

@@ -4,12 +4,15 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\Symbol;
+use App\Services\FinnhubMarketDataService;
 use Illuminate\Http\JsonResponse;
 
 class MarketController extends Controller
 {
-    public function symbols(): JsonResponse
+    public function symbols(FinnhubMarketDataService $marketDataService): JsonResponse
     {
+        $marketDataService->refreshStaleStockQuotes();
+
         $symbols = Symbol::query()
             ->with('latestQuote')
             ->where('is_active', true)

@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { apiFetch } from '../services/api';
+import { tradingService } from '../services/tradingService';
+import { MOCK_SYMBOLS } from '../constants';
 import { Account, Agent, AgentLog, DashboardSnapshot, LedgerEvent, Order, Position } from '../types';
 
 function mapAccount(account: any): Account {
@@ -86,6 +88,7 @@ export function useTradingData(user: any) {
   const [dashboard, setDashboard] = useState<DashboardSnapshot | null>(null);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [logs, setLogs] = useState<AgentLog[]>([]);
+  const [symbols, setSymbols] = useState(MOCK_SYMBOLS);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -110,6 +113,7 @@ export function useTradingData(user: any) {
       ]);
       setOrders([]);
       setLedger([]);
+      setSymbols(MOCK_SYMBOLS);
       setDashboard({
         summary: {
           holdingsValue: 24000,
@@ -156,12 +160,13 @@ export function useTradingData(user: any) {
       setLoading(true);
 
       try {
-        const [dashboardResponse, accountResponse, positionsResponse, ordersResponse, ledgerResponse] = await Promise.all([
+        const [dashboardResponse, accountResponse, positionsResponse, ordersResponse, ledgerResponse, symbolsResponse] = await Promise.all([
           apiFetch<{ data: any }>(`/users/${uid}/dashboard`),
           apiFetch<{ data: any }>(`/users/${uid}/account`),
           apiFetch<{ data: any[] }>(`/users/${uid}/positions`),
           apiFetch<{ data: any[] }>(`/users/${uid}/orders`),
           apiFetch<{ data: any[] }>(`/users/${uid}/ledger`),
+          tradingService.refreshSymbols(),
         ]);
 
         if (cancelled) return;
@@ -171,6 +176,7 @@ export function useTradingData(user: any) {
         setPositions(positionsResponse.data.map(mapPosition));
         setOrders(ordersResponse.data.map(mapOrder));
         setLedger(ledgerResponse.data.map(mapLedger));
+        setSymbols(symbolsResponse);
         setAgents([]);
         setLogs([]);
       } finally {
@@ -181,6 +187,9 @@ export function useTradingData(user: any) {
     };
 
     void load();
+    const intervalId = window.setInterval(() => {
+      void load();
+    }, 15000);
 
     const handleRefresh = () => {
       void load();
@@ -190,9 +199,10 @@ export function useTradingData(user: any) {
 
     return () => {
       cancelled = true;
+      window.clearInterval(intervalId);
       window.removeEventListener('marketclaw:data-changed', handleRefresh);
     };
   }, [user]);
 
-  return { account, positions, orders, ledger, dashboard, agents, logs, loading };
+  return { account, positions, orders, ledger, dashboard, agents, logs, symbols, loading };
 }

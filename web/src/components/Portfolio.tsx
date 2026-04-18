@@ -1,29 +1,32 @@
 import React from 'react';
 import { Briefcase, TrendingUp, TrendingDown, PieChart, Activity, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { Position, Account } from '../types';
-import { MOCK_SYMBOLS } from '../constants';
+import { SymbolInfo } from '../types';
 
 interface PortfolioProps {
   account: Account | null;
   positions: Position[];
+  symbols: SymbolInfo[];
 }
 
-export default function Portfolio({ account, positions }: PortfolioProps) {
+export default function Portfolio({ account, positions, symbols }: PortfolioProps) {
+  const liveSymbols = symbols.length > 0 ? symbols : [];
+
   const holdingsValue = positions.reduce((acc, pos) => {
-    const symbolInfo = MOCK_SYMBOLS.find(s => s.symbol === pos.symbol);
+    const symbolInfo = liveSymbols.find(s => s.symbol === pos.symbol);
     return acc + (pos.quantity * (symbolInfo?.price || pos.averageEntryPrice));
   }, 0);
 
   const totalEquity = (account?.cashBalance || 0) + holdingsValue;
   const dayPL = positions.reduce((acc, pos) => {
-    const symbolInfo = MOCK_SYMBOLS.find(s => s.symbol === pos.symbol);
+    const symbolInfo = liveSymbols.find(s => s.symbol === pos.symbol);
     if (!symbolInfo) return acc;
     const dayChange = symbolInfo.change * pos.quantity;
     return acc + dayChange;
   }, 0);
 
   const totalPL = positions.reduce((acc, pos) => {
-    const symbolInfo = MOCK_SYMBOLS.find(s => s.symbol === pos.symbol);
+    const symbolInfo = liveSymbols.find(s => s.symbol === pos.symbol);
     const currentVal = pos.quantity * (symbolInfo?.price || pos.averageEntryPrice);
     const costBasis = pos.quantity * pos.averageEntryPrice;
     return acc + (currentVal - costBasis);
@@ -76,7 +79,7 @@ export default function Portfolio({ account, positions }: PortfolioProps) {
             </thead>
             <tbody className="divide-y divide-zinc-800/50">
               {positions.map((pos) => {
-                const symbolInfo = MOCK_SYMBOLS.find(s => s.symbol === pos.symbol);
+                const symbolInfo = liveSymbols.find(s => s.symbol === pos.symbol);
                 const currentPrice = symbolInfo?.price || pos.averageEntryPrice;
                 const marketVal = pos.quantity * currentPrice;
                 const pl = (currentPrice - pos.averageEntryPrice) * pos.quantity;

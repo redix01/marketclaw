@@ -35,4 +35,9 @@ return [
         ],
     ],
 
+    'finnhub' => [
+        'key' => env('FINNHUB_API_KEY'),
+        'base_url' => env('FINNHUB_BASE_URL', 'https://finnhub.io/api/v1'),
+    ],
+
 ];
