@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { apiFetch } from '../services/api';
 import { tradingService } from '../services/tradingService';
 import { MOCK_SYMBOLS } from '../constants';
-import { Account, Agent, AgentLog, DashboardSnapshot, LedgerEvent, Order, Position } from '../types';
+import { Account, Agent, AgentLog, DashboardSnapshot, LedgerEvent, Order, Position, SymbolInfo } from '../types';
 
 function mapAccount(account: any): Account {
   return {
@@ -78,6 +78,18 @@ function mapDashboard(snapshot: any): DashboardSnapshot {
       color: point.color,
     })),
   };
+}
+
+function mapSymbols(symbols: any[]): SymbolInfo[] {
+  return symbols.map((symbol: any) => ({
+    symbol: symbol.symbol,
+    name: symbol.name,
+    price: symbol.price ?? 0,
+    change: symbol.change ?? 0,
+    changePercent: symbol.changePercent ?? 0,
+    type: symbol.type,
+    quotedAt: symbol.quotedAt ?? undefined,
+  }));
 }
 
 export function useTradingData(user: any) {
@@ -176,7 +188,7 @@ export function useTradingData(user: any) {
         setPositions(positionsResponse.data.map(mapPosition));
         setOrders(ordersResponse.data.map(mapOrder));
         setLedger(ledgerResponse.data.map(mapLedger));
-        setSymbols(symbolsResponse);
+        setSymbols(mapSymbols(symbolsResponse));
         setAgents([]);
         setLogs([]);
       } finally {

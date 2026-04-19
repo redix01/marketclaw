@@ -13,10 +13,12 @@ class FinnhubMarketDataTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_market_symbols_endpoint_refreshes_stale_stock_quotes_from_finnhub(): void
+    public function test_market_symbols_endpoint_refreshes_stock_and_crypto_quotes(): void
     {
         Config::set('services.finnhub.key', 'test-finnhub-key');
         Config::set('services.finnhub.base_url', 'https://finnhub.io/api/v1');
+        Config::set('services.coinmarketcap.key', 'test-cmc-key');
+        Config::set('services.coinmarketcap.base_url', 'https://pro-api.coinmarketcap.com');
 
         $stock = Symbol::create([
             'ticker' => 'AAPL',
@@ -49,7 +51,7 @@ class FinnhubMarketDataTest extends TestCase
             'price' => 65000.00000000,
             'change' => 1500.00000000,
             'change_percent' => 2.3500,
-            'quoted_at' => now(),
+            'quoted_at' => now()->subHours(2),
         ]);
 
         Http::fake([
@@ -59,6 +61,19 @@ class FinnhubMarketDataTest extends TestCase
                 'dp' => 1.69,
                 'pc' => 190.24,
                 't' => now()->timestamp,
+            ], 200),
+            'https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest*' => Http::response([
+                'data' => [
+                    'BTC' => [
+                        'quote' => [
+                            'USD' => [
+                                'price' => 70123.45,
+                                'percent_change_24h' => 4.5,
+                                'last_updated' => now()->toISOString(),
+                            ],
+                        ],
+                    ],
+                ],
             ], 200),
         ]);
 
@@ -71,11 +86,23 @@ class FinnhubMarketDataTest extends TestCase
             'change' => 3.21,
             'changePercent' => 1.69,
         ]);
+        $response->assertJsonFragment([
+            'symbol' => 'BTC',
+            'price' => 70123.45,
+            'changePercent' => 4.5,
+        ]);
 
-        Http::assertSentCount(1);
+        Http::assertSentCount(2);
 
         Http::assertSent(function ($request): bool {
-            return $request->url() === 'https://finnhub.io/api/v1/quote?symbol=AAPL&token=test-finnhub-key';
+            return str_contains($request->url(), 'https://finnhub.io/api/v1/quote')
+                && str_contains($request->url(), 'symbol=AAPL')
+                && str_contains($request->url(), 'token=test-finnhub-key');
+        });
+
+        Http::assertSent(function ($request): bool {
+            return str_starts_with($request->url(), 'https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest')
+                && $request->hasHeader('X-CMC_PRO_API_KEY', 'test-cmc-key');
         });
     }
 }

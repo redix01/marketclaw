@@ -8,6 +8,7 @@ import Auth from './components/Auth';
 import Dashboard from './components/Dashboard';
 import Portfolio from './components/Portfolio';
 import Trade from './components/Trade';
+import Assets from './components/Assets';
 import OrdersHistory from './components/OrdersHistory';
 import Agents from './components/Agents';
 import AgentLogs from './components/AgentLogs';
@@ -15,7 +16,7 @@ import Wallet from './components/Wallet';
 import Settings from './components/Settings';
 import LandingPage from './components/LandingPage';
 
-const APP_TABS = ['overview', 'portfolio', 'trade', 'orders', 'history', 'agents', 'logs', 'wallet', 'settings'] as const;
+const APP_TABS = ['overview', 'portfolio', 'assets', 'trade', 'orders', 'history', 'agents', 'logs', 'wallet', 'settings'] as const;
 type AppTab = (typeof APP_TABS)[number];
 
 function normalizeTab(tab?: string): AppTab {
@@ -51,6 +52,8 @@ function DashboardShell({
         return <Dashboard account={account} positions={positions} orders={orders} ledger={ledger} agents={agents} dashboard={dashboard} />;
       case 'portfolio':
         return <Portfolio account={account} positions={positions} symbols={symbols} />;
+      case 'assets':
+        return <Assets basePath={basePath} positions={positions} symbols={symbols} />;
       case 'trade':
         return <Trade user={user} account={account} positions={positions} symbols={symbols} />;
       case 'orders':

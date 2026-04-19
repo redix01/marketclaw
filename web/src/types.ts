@@ -93,6 +93,7 @@ export interface SymbolInfo {
   change: number;
   changePercent: number;
   type: AssetType;
+  quotedAt?: string;
 }
 
 export interface EquityPoint {

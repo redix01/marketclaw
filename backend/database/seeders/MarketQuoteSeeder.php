@@ -29,16 +29,12 @@ class MarketQuoteSeeder extends Seeder
                 continue;
             }
 
-            $quotedAt = $symbol->asset_type === 'stock'
-                ? now()->subHours(2)
-                : now();
-
             MarketQuote::create([
                 'symbol_id' => $symbol->id,
                 'price' => $quote['price'],
                 'change' => $quote['change'],
                 'change_percent' => $quote['change_percent'],
-                'quoted_at' => $quotedAt,
+                'quoted_at' => now()->subHours(2),
             ]);
         }
     }

@@ -14,22 +14,23 @@ export default function Portfolio({ account, positions, symbols }: PortfolioProp
 
   const holdingsValue = positions.reduce((acc, pos) => {
     const symbolInfo = liveSymbols.find(s => s.symbol === pos.symbol);
-    return acc + (pos.quantity * (symbolInfo?.price || pos.averageEntryPrice));
+    const currentPrice = pos.currentPrice ?? symbolInfo?.price ?? pos.averageEntryPrice;
+    return acc + (pos.quantity * currentPrice);
   }, 0);
 
   const totalEquity = (account?.cashBalance || 0) + holdingsValue;
   const dayPL = positions.reduce((acc, pos) => {
     const symbolInfo = liveSymbols.find(s => s.symbol === pos.symbol);
-    if (!symbolInfo) return acc;
-    const dayChange = symbolInfo.change * pos.quantity;
+    const dayChange = (symbolInfo?.change ?? 0) * pos.quantity;
     return acc + dayChange;
   }, 0);
 
   const totalPL = positions.reduce((acc, pos) => {
     const symbolInfo = liveSymbols.find(s => s.symbol === pos.symbol);
-    const currentVal = pos.quantity * (symbolInfo?.price || pos.averageEntryPrice);
+    const currentPrice = pos.currentPrice ?? symbolInfo?.price ?? pos.averageEntryPrice;
+    const currentVal = pos.quantity * currentPrice;
     const costBasis = pos.quantity * pos.averageEntryPrice;
-    return acc + (currentVal - costBasis);
+    return acc + (pos.unrealizedPL ?? (currentVal - costBasis));
   }, 0);
 
   return (
@@ -80,9 +81,9 @@ export default function Portfolio({ account, positions, symbols }: PortfolioProp
             <tbody className="divide-y divide-zinc-800/50">
               {positions.map((pos) => {
                 const symbolInfo = liveSymbols.find(s => s.symbol === pos.symbol);
-                const currentPrice = symbolInfo?.price || pos.averageEntryPrice;
+                const currentPrice = pos.currentPrice ?? symbolInfo?.price ?? pos.averageEntryPrice;
                 const marketVal = pos.quantity * currentPrice;
-                const pl = (currentPrice - pos.averageEntryPrice) * pos.quantity;
+                const pl = pos.unrealizedPL ?? ((currentPrice - pos.averageEntryPrice) * pos.quantity);
                 const plPercent = ((currentPrice / pos.averageEntryPrice) - 1) * 100;
 
                 return (

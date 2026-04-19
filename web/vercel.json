@@ -1,6 +1,14 @@
 {
   "rewrites": [
     {
+      "source": "/api/v1/(.*)",
+      "destination": "https://marketclaw-api.95.217.130.102.sslip.io/api/v1/$1"
+    },
+    {
+      "source": "/api/v1",
+      "destination": "https://marketclaw-api.95.217.130.102.sslip.io/api/v1"
+    },
+    {
       "source": "/((?!.*\\.).*)",
       "destination": "/"
     }

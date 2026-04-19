@@ -4,14 +4,14 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\Symbol;
-use App\Services\FinnhubMarketDataService;
+use App\Services\MarketDataRefreshService;
 use Illuminate\Http\JsonResponse;
 
 class MarketController extends Controller
 {
-    public function symbols(FinnhubMarketDataService $marketDataService): JsonResponse
+    public function symbols(MarketDataRefreshService $marketDataService): JsonResponse
     {
-        $marketDataService->refreshStaleStockQuotes();
+        $marketDataService->refreshStaleQuotes(1);
 
         $symbols = Symbol::query()
             ->with('latestQuote')

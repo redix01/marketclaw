@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   Briefcase, 
+  BarChart3,
   TrendingUp, 
   ClipboardList, 
   History, 
@@ -77,6 +78,7 @@ export default function Layout({ children, activeTab, basePath, user, account, i
   const menuItems = [
     { id: 'overview', label: 'Overview', icon: LayoutDashboard },
     { id: 'portfolio', label: 'Portfolio', icon: Briefcase },
+    { id: 'assets', label: 'Assets', icon: BarChart3 },
     { id: 'trade', label: 'Trade', icon: TrendingUp },
     { id: 'orders', label: 'Orders', icon: ClipboardList },
     { id: 'history', label: 'History', icon: History },

@@ -6,6 +6,7 @@ use App\Domain\Accounts\Actions\EnsurePaperAccount;
 use App\Domain\Trading\Queries\BuildDashboardSnapshot;
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\MarketDataRefreshService;
 use Illuminate\Http\JsonResponse;
 
 class DashboardController extends Controller
@@ -14,7 +15,9 @@ class DashboardController extends Controller
         User $user,
         EnsurePaperAccount $ensurePaperAccount,
         BuildDashboardSnapshot $buildDashboardSnapshot,
+        MarketDataRefreshService $marketDataRefreshService,
     ): JsonResponse {
+        $marketDataRefreshService->refreshStaleQuotes(1);
         $account = $ensurePaperAccount->handle($user);
 
         return response()->json([

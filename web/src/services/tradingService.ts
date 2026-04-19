@@ -10,6 +10,7 @@ type SymbolRecord = {
   price: number | null;
   change: number;
   changePercent: number;
+  quotedAt?: string;
 };
 
 let cachedSymbols: SymbolRecord[] | null = null;
@@ -32,6 +33,7 @@ async function fetchSymbols(forceRefresh = false) {
       price: symbol.price,
       change: symbol.change,
       changePercent: symbol.changePercent,
+      quotedAt: symbol.quotedAt,
     }));
 
     return cachedSymbols;
