@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\AccountController;
+use App\Http\Controllers\Api\V1\ClosedTradesController;
 use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\LedgerController;
@@ -37,6 +38,7 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/orders', [OrderController::class, 'index']);
         Route::post('/orders', [OrderController::class, 'store']);
         Route::get('/ledger', [LedgerController::class, 'index']);
+        Route::get('/closed-trades', [ClosedTradesController::class, 'index']);
         });
     });
 });

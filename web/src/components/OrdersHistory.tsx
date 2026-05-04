@@ -1,146 +1,86 @@
-import React, { useState } from 'react';
-import { ClipboardList, History as HistoryIcon, Search, Filter, ArrowUpRight, ArrowDownRight } from 'lucide-react';
-import { Order, LedgerEvent } from '../types';
+import React from 'react';
+import { ClipboardList, Search, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { Order } from '../types';
 
 interface OrdersHistoryProps {
   orders: Order[];
-  ledger: LedgerEvent[];
+  ledger: never[];
 }
 
-export default function OrdersHistory({ orders, ledger }: OrdersHistoryProps) {
-  const [activeTab, setActiveTab] = useState<'orders' | 'history'>('orders');
-
+export default function OrdersHistory({ orders }: OrdersHistory) {
   return (
     <div className="space-y-6">
-      <div className="flex p-1 bg-zinc-900 rounded-xl w-fit mb-6">
-        <button 
-          onClick={() => setActiveTab('orders')}
-          className={`px-6 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === 'orders' ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/20' : 'text-zinc-500 hover:text-zinc-300'}`}
-        >
-          Orders
-        </button>
-        <button 
-          onClick={() => setActiveTab('history')}
-          className={`px-6 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === 'history' ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/20' : 'text-zinc-500 hover:text-zinc-300'}`}
-        >
-          History
-        </button>
-      </div>
-
       <div className="bg-[#0F0F11] border border-zinc-800/50 rounded-2xl overflow-hidden">
         <div className="p-6 border-b border-zinc-800/50 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div className="flex items-center gap-2">
-            {activeTab === 'orders' ? <ClipboardList size={20} className="text-emerald-400" /> : <HistoryIcon size={20} className="text-emerald-400" />}
-            <h3 className="text-lg font-bold">{activeTab === 'orders' ? 'Trade Orders' : 'Account History'}</h3>
+            <ClipboardList size={20} className="text-emerald-400" />
+            <h3 className="text-lg font-bold">Grid Orders</h3>
           </div>
           <div className="relative w-full md:w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={16} />
             <input 
               type="text" 
-              placeholder={`Search ${activeTab}...`} 
+              placeholder="Search orders..." 
               className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-2 pl-10 pr-4 text-xs focus:outline-none focus:border-emerald-500/50 transition-all"
             />
           </div>
         </div>
 
         <div className="overflow-x-auto">
-          {activeTab === 'orders' ? (
-            <table className="w-full text-left">
-              <thead>
-                <tr className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold border-b border-zinc-800/50">
-                  <th className="px-6 py-4">Time</th>
-                  <th className="px-6 py-4">Symbol</th>
-                  <th className="px-6 py-4">Side</th>
-                  <th className="px-6 py-4">Qty</th>
-                  <th className="px-6 py-4">Price</th>
-                  <th className="px-6 py-4">Status</th>
-                  <th className="px-6 py-4 text-right">Source</th>
+          <table className="w-full text-left">
+            <thead>
+              <tr className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold border-b border-zinc-800/50">
+                <th className="px-6 py-4">Time</th>
+                <th className="px-6 py-4">Symbol</th>
+                <th className="px-6 py-4">Side</th>
+                <th className="px-6 py-4">Qty</th>
+                <th className="px-6 py-4">Price</th>
+                <th className="px-6 py-4">Status</th>
+                <th className="px-6 py-4 text-right">Source</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-800/50">
+              {orders.map((order) => (
+                <tr key={order.id} className="hover:bg-zinc-800/30 transition-colors">
+                  <td className="px-6 py-4 text-xs text-zinc-400">
+                    {new Date(order.createdAt).toLocaleDateString()}
+                    <span className="block opacity-50">{new Date(order.createdAt).toLocaleTimeString()}</span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className="text-sm font-bold">{order.symbol}</span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase border ${
+                      order.side === 'buy' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                    }`}>
+                      {order.side}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-sm font-mono">{order.quantity}</td>
+                  <td className="px-6 py-4 text-sm font-mono">${order.fillPrice?.toFixed(2) || '---'}</td>
+                  <td className="px-6 py-4">
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${
+                      order.status === 'filled' ? 'bg-emerald-500/10 text-emerald-400' :
+                      order.status === 'pending' ? 'bg-amber-500/10 text-amber-400' :
+                      'bg-rose-500/10 text-rose-400'
+                    }`}>
+                      {order.status}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <span className="text-[10px] text-zinc-500 uppercase font-bold">{order.source}</span>
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-800/50">
-                {orders.map((order) => (
-                  <tr key={order.id} className="hover:bg-zinc-800/30 transition-colors">
-                    <td className="px-6 py-4 text-xs text-zinc-400">
-                      {new Date(order.createdAt).toLocaleDateString()}
-                      <span className="block opacity-50">{new Date(order.createdAt).toLocaleTimeString()}</span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="text-sm font-bold">{order.symbol}</span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase border ${
-                        order.side === 'buy' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
-                      }`}>
-                        {order.side}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm font-mono">{order.quantity}</td>
-                    <td className="px-6 py-4 text-sm font-mono">${order.fillPrice?.toFixed(2) || '---'}</td>
-                    <td className="px-6 py-4">
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${
-                        order.status === 'filled' ? 'bg-emerald-500/10 text-emerald-400' :
-                        order.status === 'pending' ? 'bg-amber-500/10 text-amber-400' :
-                        'bg-rose-500/10 text-rose-400'
-                      }`}>
-                        {order.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <span className="text-[10px] text-zinc-500 uppercase font-bold">{order.source}</span>
-                    </td>
-                  </tr>
-                ))}
-                {orders.length === 0 && (
-                  <tr>
-                    <td colSpan={7} className="px-6 py-12 text-center text-zinc-500 italic">
-                      No orders found.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          ) : (
-            <table className="w-full text-left">
-              <thead>
-                <tr className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold border-b border-zinc-800/50">
-                  <th className="px-6 py-4">Time</th>
-                  <th className="px-6 py-4">Type</th>
-                  <th className="px-6 py-4">Description</th>
-                  <th className="px-6 py-4 text-right">Amount</th>
+              ))}
+              {orders.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-6 py-12 text-center text-zinc-500 italic">
+                    No grid orders found.
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-800/50">
-                {ledger.map((event) => (
-                  <tr key={event.id} className="hover:bg-zinc-800/30 transition-colors">
-                    <td className="px-6 py-4 text-xs text-zinc-400">
-                      {new Date(event.timestamp).toLocaleDateString()}
-                      <span className="block opacity-50">{new Date(event.timestamp).toLocaleTimeString()}</span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase border ${
-                        event.type === 'deposit' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
-                        event.type === 'withdrawal' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' :
-                        'bg-blue-500/10 text-blue-400 border-blue-500/20'
-                      }`}>
-                        {event.type.replace('_', ' ')}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-zinc-300">{event.description}</td>
-                    <td className={`px-6 py-4 text-sm font-mono font-bold text-right ${event.amount >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                      {event.amount >= 0 ? '+' : ''}{event.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                    </td>
-                  </tr>
-                ))}
-                {ledger.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="px-6 py-12 text-center text-zinc-500 italic">
-                      No history found.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          )}
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

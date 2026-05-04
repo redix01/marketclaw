@@ -121,3 +121,25 @@ export interface DashboardSnapshot {
   equityCurve: EquityPoint[];
   assetAllocation: AllocationPoint[];
 }
+
+export interface ClosedTrade {
+  id: string;
+  symbol: string;
+  assetType: AssetType;
+  quantity: number;
+  entryPrice: number;
+  exitPrice: number;
+  realizedPnl: number;
+  pnlPercent: number;
+  autoClosed: boolean;
+  source: OrderSource;
+  filledAt: string;
+}
+
+export interface ClosedTradesSummary {
+  totalTrades: number;
+  totalRealizedPnl: number;
+  avgPnlPercent: number;
+  autoClosedCount: number;
+  manualClosedCount: number;
+}

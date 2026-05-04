@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { apiFetch } from '../services/api';
 import { tradingService } from '../services/tradingService';
 import { MOCK_SYMBOLS } from '../constants';
-import { Account, Agent, AgentLog, DashboardSnapshot, LedgerEvent, Order, Position, SymbolInfo } from '../types';
+import { Account, Agent, AgentLog, ClosedTrade, ClosedTradesSummary, DashboardSnapshot, LedgerEvent, Order, Position, SymbolInfo } from '../types';
 
 function mapAccount(account: any): Account {
   return {
@@ -101,6 +101,8 @@ export function useTradingData(user: any) {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [logs, setLogs] = useState<AgentLog[]>([]);
   const [symbols, setSymbols] = useState(MOCK_SYMBOLS);
+  const [closedTrades, setClosedTrades] = useState<ClosedTrade[]>([]);
+  const [closedTradesSummary, setClosedTradesSummary] = useState<ClosedTradesSummary | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -172,13 +174,14 @@ export function useTradingData(user: any) {
       setLoading(true);
 
       try {
-        const [dashboardResponse, accountResponse, positionsResponse, ordersResponse, ledgerResponse, symbolsResponse] = await Promise.all([
+        const [dashboardResponse, accountResponse, positionsResponse, ordersResponse, ledgerResponse, symbolsResponse, closedTradesResponse] = await Promise.all([
           apiFetch<{ data: any }>(`/users/${uid}/dashboard`),
           apiFetch<{ data: any }>(`/users/${uid}/account`),
           apiFetch<{ data: any[] }>(`/users/${uid}/positions`),
           apiFetch<{ data: any[] }>(`/users/${uid}/orders`),
           apiFetch<{ data: any[] }>(`/users/${uid}/ledger`),
           tradingService.refreshSymbols(),
+          apiFetch<{ data: any[]; summary: any }>(`/users/${uid}/closed-trades`),
         ]);
 
         if (cancelled) return;
@@ -191,6 +194,20 @@ export function useTradingData(user: any) {
         setSymbols(mapSymbols(symbolsResponse));
         setAgents([]);
         setLogs([]);
+        setClosedTrades(closedTradesResponse.data.map((trade: any) => ({
+          id: String(trade.id),
+          symbol: trade.symbol,
+          assetType: trade.asset_type,
+          quantity: parseFloat(trade.quantity),
+          entryPrice: parseFloat(trade.entry_price),
+          exitPrice: parseFloat(trade.exit_price),
+          realizedPnl: parseFloat(trade.realized_pnl),
+          pnlPercent: parseFloat(trade.pnl_percent),
+          autoClosed: trade.auto_closed === true || trade.auto_closed === 'true' || trade.auto_closed === 1,
+          source: trade.source,
+          filledAt: trade.filled_at,
+        })));
+        setClosedTradesSummary(closedTradesResponse.summary);
       } finally {
         if (!cancelled) {
           setLoading(false);
@@ -216,5 +233,5 @@ export function useTradingData(user: any) {
     };
   }, [user]);
 
-  return { account, positions, orders, ledger, dashboard, agents, logs, symbols, loading };
+  return { account, positions, orders, ledger, dashboard, agents, logs, symbols, closedTrades, closedTradesSummary, loading };
 }

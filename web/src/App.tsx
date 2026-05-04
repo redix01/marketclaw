@@ -14,9 +14,10 @@ import Agents from './components/Agents';
 import AgentLogs from './components/AgentLogs';
 import Wallet from './components/Wallet';
 import Settings from './components/Settings';
+import ClosedTrades from './components/ClosedTrades';
 import LandingPage from './components/LandingPage';
 
-const APP_TABS = ['overview', 'portfolio', 'assets', 'trade', 'orders', 'history', 'agents', 'logs', 'wallet', 'settings'] as const;
+const APP_TABS = ['overview', 'portfolio', 'assets', 'trade', 'grid-orders', 'closed', 'agents', 'logs', 'wallet', 'settings'] as const;
 type AppTab = (typeof APP_TABS)[number];
 
 function normalizeTab(tab?: string): AppTab {
@@ -44,7 +45,7 @@ function DashboardShell({
 }) {
   const { tab } = useParams();
   const activeTab = normalizeTab(tab);
-  const { account, positions, orders, ledger, dashboard, agents, logs, symbols } = useTradingData(user);
+  const { account, positions, orders, ledger, dashboard, agents, logs, symbols, closedTrades, closedTradesSummary } = useTradingData(user);
 
   const renderContent = () => {
     switch (activeTab) {
@@ -53,12 +54,13 @@ function DashboardShell({
       case 'portfolio':
         return <Portfolio account={account} positions={positions} symbols={symbols} />;
       case 'assets':
-        return <Assets basePath={basePath} positions={positions} symbols={symbols} account={account} />;
+        return <Assets basePath={basePath} positions={positions} symbols={symbols} />;
       case 'trade':
         return <Trade user={user} account={account} positions={positions} symbols={symbols} />;
-      case 'orders':
-      case 'history':
+      case 'grid-orders':
         return <OrdersHistory orders={orders} ledger={ledger} />;
+      case 'closed':
+        return <ClosedTrades trades={closedTrades} summary={closedTradesSummary} />;
       case 'agents':
         return <Agents user={user} agents={agents} positions={positions} />;
       case 'logs':
