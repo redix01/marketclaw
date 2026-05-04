@@ -11,6 +11,7 @@ interface AssetsProps {
 }
 
 interface GridConfig {
+  id: string;
   symbol: string;
   name: string;
   type: 'stock' | 'crypto';
@@ -24,8 +25,18 @@ interface GridConfig {
   filledLevels: number;
   realizedPnL: number;
   unrealizedPnL: number;
-  durationMinutes: number;
+  openedAt: number;
+  closeThreshold: number;
+  stopThreshold: number;
   active: boolean;
+}
+
+interface ClosedTrade {
+  id: string;
+  symbol: string;
+  pnl: number;
+  outcome: 'win' | 'loss';
+  closedAt: number;
 }
 
 interface GridTick {
@@ -71,33 +82,41 @@ function formatDuration(totalMinutes: number) {
   return `${hours}h ${mins.toString().padStart(2, '0')}m`;
 }
 
-function buildGrid(symbol: SymbolInfo, index: number): GridConfig {
-  const seed = symbolSeed(symbol.symbol);
+let gridIdCounter = 0;
+function nextGridId(symbol: string) {
+  gridIdCounter += 1;
+  return `${symbol}-${gridIdCounter}`;
+}
+
+function buildGrid(symbol: SymbolInfo, index: number, openedAt: number): GridConfig {
+  const seed = symbolSeed(symbol.symbol) + Math.floor(Math.random() * 97);
   const totalLevels = clamp(10 + ((seed + index) % 18), 10, 28);
   const filledLevels = (seed + index * 3) % (totalLevels + 1);
   const margin = clamp(8 + (seed % 11) + index * 0.4, 8, 50);
   const rangePercent = clamp(2 + ((seed % 13) * 0.6), 1.8, 9.5);
-  const baseRealized = ((seed % 23) - 8) * 0.012;
-  const active = (seed + index) % 5 !== 0;
-  const durationMinutes = 60 + ((seed * 7 + index * 11) % 1800);
-  const baseUnrealized = active ? ((seed % 7) - 3) * 0.0185 : 0;
+  const baseUnrealized = ((seed % 7) - 3) * 0.012;
+  const closeThreshold = 0.02 + ((seed % 11) / 1000);
+  const stopThreshold = -(0.02 + ((seed % 9) / 1000));
 
   return {
+    id: nextGridId(symbol.symbol),
     symbol: symbol.symbol,
     name: symbol.name,
     type: symbol.type,
     basePrice: symbol.price,
     baseChangePercent: symbol.changePercent,
-    leverage: 50,
+    leverage: 10,
     margin,
     exposurePercent: clamp((margin / 192) * 100, 0.6, 28),
     rangePercent,
     totalLevels,
     filledLevels,
-    realizedPnL: baseRealized,
+    realizedPnL: 0,
     unrealizedPnL: baseUnrealized,
-    durationMinutes,
-    active,
+    openedAt,
+    closeThreshold,
+    stopThreshold,
+    active: true,
   };
 }
 
@@ -127,15 +146,28 @@ export default function Assets({ positions, symbols, account }: AssetsProps) {
   const [tab, setTab] = useState<'detail' | 'history'>('detail');
   const liveSymbols = symbols.length > 0 ? symbols : MOCK_SYMBOLS;
 
-  const grids = useMemo<GridConfig[]>(
-    () => liveSymbols.map((symbol, index) => buildGrid(symbol, index)),
-    [liveSymbols]
+  const liveSymbolsRef = useRef(liveSymbols);
+  liveSymbolsRef.current = liveSymbols;
+
+  const sessionStartRef = useRef<number>(Date.now());
+  const [grids, setGrids] = useState<GridConfig[]>(() =>
+    liveSymbols.map((symbol, index) => buildGrid(symbol, index, Date.now()))
   );
+  const [closedTrades, setClosedTrades] = useState<ClosedTrade[]>([]);
+  const [sessionRealized, setSessionRealized] = useState(0);
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, []);
 
   const [selectedSymbol, setSelectedSymbol] = useState<string>(grids[0]?.symbol ?? '');
   const [ticks, setTicks] = useState<Record<string, GridTick>>({});
   const ticksRef = useRef<Record<string, GridTick>>({});
   ticksRef.current = ticks;
+  const gridsRef = useRef(grids);
+  gridsRef.current = grids;
 
   useEffect(() => {
     if (!grids.some((grid) => grid.symbol === selectedSymbol)) {
@@ -147,32 +179,85 @@ export default function Assets({ positions, symbols, account }: AssetsProps) {
     let frame: number;
     let last = 0;
 
-    const loop = (now: number) => {
-      if (now - last >= 750) {
-        last = now;
-        const next: Record<string, GridTick> = {};
-        for (const grid of grids) {
-          next[grid.symbol] = tickGrid(grid, ticksRef.current[grid.symbol], now);
+    const loop = (nowMs: number) => {
+      if (nowMs - last >= 750) {
+        last = nowMs;
+        const currentGrids = gridsRef.current;
+        const nextTicks: Record<string, GridTick> = {};
+        const closedThisRound: ClosedTrade[] = [];
+        let realizedDelta = 0;
+
+        const replacements: { index: number; grid: GridConfig }[] = [];
+
+        for (let i = 0; i < currentGrids.length; i += 1) {
+          const grid = currentGrids[i];
+          const tick = tickGrid(grid, ticksRef.current[grid.id], nowMs);
+          const pnlPct = grid.margin > 0 ? tick.unrealizedPnL / grid.margin : 0;
+
+          const ageMs = Date.now() - grid.openedAt;
+          const eligible = ageMs > 4000;
+
+          if (eligible && (pnlPct >= grid.closeThreshold || pnlPct <= grid.stopThreshold)) {
+            const outcome: 'win' | 'loss' = pnlPct >= 0 ? 'win' : 'loss';
+            closedThisRound.push({
+              id: grid.id,
+              symbol: grid.symbol,
+              pnl: tick.unrealizedPnL,
+              outcome,
+              closedAt: Date.now(),
+            });
+            realizedDelta += tick.unrealizedPnL;
+
+            const pool = liveSymbolsRef.current;
+            const activeSymbols = new Set(currentGrids.map((g, idx) => (idx === i ? null : g.symbol)).filter(Boolean) as string[]);
+            const candidates = pool.filter((entry) => !activeSymbols.has(entry.symbol));
+            const fresh = (candidates.length > 0 ? candidates : pool)[Math.floor(Math.random() * (candidates.length || pool.length))];
+            const newGrid = buildGrid(fresh, i, Date.now());
+            replacements.push({ index: i, grid: newGrid });
+            nextTicks[newGrid.id] = {
+              price: newGrid.basePrice,
+              changePercent: newGrid.baseChangePercent,
+              unrealizedPnL: 0,
+              realizedPnL: 0,
+              filledLevels: newGrid.filledLevels,
+            };
+          } else {
+            nextTicks[grid.id] = tick;
+          }
         }
-        setTicks(next);
+
+        if (replacements.length > 0) {
+          const updated = currentGrids.slice();
+          for (const replacement of replacements) {
+            updated[replacement.index] = replacement.grid;
+          }
+          setGrids(updated);
+        }
+
+        setTicks(nextTicks);
+
+        if (closedThisRound.length > 0) {
+          setClosedTrades((prev) => [...closedThisRound, ...prev].slice(0, 200));
+          setSessionRealized((prev) => prev + realizedDelta);
+        }
       }
       frame = window.requestAnimationFrame(loop);
     };
 
     frame = window.requestAnimationFrame(loop);
     return () => window.cancelAnimationFrame(frame);
-  }, [grids]);
+  }, []);
 
   const enriched = useMemo(
     () =>
       grids.map((grid) => {
-        const tick = ticks[grid.symbol];
+        const tick = ticks[grid.id];
         return {
           grid,
           price: tick?.price ?? grid.basePrice,
           changePercent: tick?.changePercent ?? grid.baseChangePercent,
           unrealizedPnL: tick?.unrealizedPnL ?? 0,
-          realizedPnL: tick?.realizedPnL ?? grid.margin * grid.realizedPnL,
+          realizedPnL: tick?.realizedPnL ?? 0,
           filledLevels: tick?.filledLevels ?? grid.filledLevels,
         };
       }),
@@ -181,19 +266,28 @@ export default function Assets({ positions, symbols, account }: AssetsProps) {
 
   const selected = enriched.find((entry) => entry.grid.symbol === selectedSymbol) ?? enriched[0];
 
-  const wallet = account?.cashBalance ?? 192.23;
+  const baseWallet = account?.cashBalance ?? 192.23;
+  const wallet = baseWallet + sessionRealized;
   const totalMargin = enriched.reduce((sum, entry) => sum + entry.grid.margin, 0);
-  const totalRealized = enriched.reduce((sum, entry) => sum + entry.realizedPnL, 0);
   const totalUnrealized = enriched.reduce((sum, entry) => sum + entry.unrealizedPnL, 0);
-  const totalPnL = totalRealized + totalUnrealized;
-  const pnlPercent = wallet > 0 ? (totalPnL / wallet) * 100 : 0;
+  const totalPnL = sessionRealized + totalUnrealized;
+  const pnlPercent = baseWallet > 0 ? (totalPnL / baseWallet) * 100 : 0;
+  const realizedPercent = baseWallet > 0 ? (sessionRealized / baseWallet) * 100 : 0;
   const exposurePercent = wallet > 0 ? clamp((totalMargin / wallet) * 100, 0, 100) : 0;
   const activeCount = enriched.filter((entry) => entry.grid.active).length;
-  const closedCount = 1523;
-  const wins = 1211;
-  const losses = 312;
-  const winRate = Math.round((wins / (wins + losses)) * 100);
-  const sessionDuration = '14h 27m';
+  const wins = closedTrades.filter((trade) => trade.outcome === 'win').length;
+  const losses = closedTrades.filter((trade) => trade.outcome === 'loss').length;
+  const closedCount = closedTrades.length;
+  const winRate = closedCount > 0 ? Math.round((wins / closedCount) * 100) : 0;
+
+  const sessionDuration = useMemo(() => {
+    const elapsedSec = Math.max(0, Math.floor((now - sessionStartRef.current) / 1000));
+    const h = Math.floor(elapsedSec / 3600);
+    const m = Math.floor((elapsedSec % 3600) / 60);
+    const s = elapsedSec % 60;
+    if (h > 0) return `${h}h ${m.toString().padStart(2, '0')}m`;
+    return `${m}m ${s.toString().padStart(2, '0')}s`;
+  }, [now]);
 
   const fillProgressBars = useMemo(() => {
     if (!selected) return [] as { active: boolean; filled: boolean }[];
@@ -236,18 +330,18 @@ export default function Assets({ positions, symbols, account }: AssetsProps) {
                 <p className="mt-1 text-[10px] text-yellow-300/80 font-bold">{exposurePercent.toFixed(1)}% exposed</p>
               </div>
               <div>
-                <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold">PNL</p>
-                <p className={`mt-1 text-2xl font-mono ${totalPnL >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                  {formatSignedMoney(totalPnL, 2)}
+                <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold">PNL (Realized)</p>
+                <p className={`mt-1 text-2xl font-mono ${sessionRealized >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  {formatSignedMoney(sessionRealized, 2)}
                 </p>
-                <p className={`mt-1 text-[10px] font-bold ${totalPnL >= 0 ? 'text-emerald-400/80' : 'text-rose-400/80'}`}>
-                  {pnlPercent >= 0 ? '+' : ''}{pnlPercent.toFixed(2)}%
+                <p className={`mt-1 text-[10px] font-bold ${sessionRealized >= 0 ? 'text-emerald-400/80' : 'text-rose-400/80'}`}>
+                  {realizedPercent >= 0 ? '+' : ''}{realizedPercent.toFixed(2)}%
                 </p>
               </div>
               <div className="col-span-2 grid grid-cols-2 gap-2 mt-1">
                 <div className="rounded-md bg-emerald-500/10 border border-emerald-500/20 px-2 py-1">
                   <p className="text-[9px] uppercase tracking-wider text-emerald-400/80 font-bold">R</p>
-                  <p className="text-xs font-mono text-emerald-300">{formatSignedMoney(totalRealized, 2)}</p>
+                  <p className="text-xs font-mono text-emerald-300">{formatSignedMoney(sessionRealized, 2)}</p>
                 </div>
                 <div className="rounded-md bg-rose-500/10 border border-rose-500/20 px-2 py-1">
                   <p className="text-[9px] uppercase tracking-wider text-rose-400/80 font-bold">U</p>
@@ -285,9 +379,12 @@ export default function Assets({ positions, symbols, account }: AssetsProps) {
               const pnl = entry.unrealizedPnL;
               const positive = pnl >= 0;
 
+              const ageSec = Math.max(0, Math.floor((now - grid.openedAt) / 1000));
+              const ageLabel = ageSec >= 60 ? `${Math.floor(ageSec / 60)}m` : `${ageSec}s`;
+
               return (
                 <button
-                  key={grid.symbol}
+                  key={grid.id}
                   onClick={() => setSelectedSymbol(grid.symbol)}
                   className={`w-full text-left px-3 py-3 rounded-lg border transition-colors flex flex-col gap-2 ${
                     isSelected
@@ -316,7 +413,7 @@ export default function Assets({ positions, symbols, account }: AssetsProps) {
                       <span className="mx-1.5 text-zinc-700">·</span>
                       <span className="font-mono">${grid.margin.toFixed(2)}</span>
                       <span className="mx-1.5 text-zinc-700">·</span>
-                      <span>{(grid.durationMinutes < 60 ? `${grid.durationMinutes}s` : `${Math.round(grid.durationMinutes / 60)}m`)}</span>
+                      <span>{ageLabel}</span>
                       <span className="mx-1.5 text-zinc-700">·</span>
                       <span className="text-yellow-300 font-bold">{grid.exposurePercent.toFixed(1)}%</span>
                     </span>
@@ -470,7 +567,7 @@ function DetailPane({
           <ParamRow label="Current Price" value={`$${formatPrice(selected.price)}`} valueClassName={selected.changePercent >= 0 ? 'text-emerald-400' : 'text-rose-400'} />
           <ParamRow label="Upper Price" value={`$${formatPrice(upper)}`} />
           <ParamRow label="Lower Price" value={`$${formatPrice(lower)}`} />
-          <ParamRow label="Duration" value={formatDuration(grid.durationMinutes)} />
+          <ParamRow label="Duration" value={formatDuration(Math.floor((Date.now() - grid.openedAt) / 60000))} />
           {holding && <ParamRow label="Position" value={`${holding.quantity} sh`} />}
         </div>
       </div>
