@@ -80,8 +80,6 @@ export default function Layout({ children, activeTab, basePath, user, account, i
     { id: 'portfolio', label: 'Portfolio', icon: Briefcase },
     { id: 'ai-trader', label: 'AI Trader', icon: BarChart3 },
     { id: 'trade', label: 'Trade', icon: TrendingUp },
-    { id: 'agents', label: 'Agents', icon: Bot },
-    { id: 'logs', label: 'Agent Logs', icon: ScrollText },
     { id: 'wallet', label: 'Wallet', icon: Wallet },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
