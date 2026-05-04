@@ -53,7 +53,7 @@ function DashboardShell({
       case 'portfolio':
         return <Portfolio account={account} positions={positions} symbols={symbols} />;
       case 'ai-trader':
-        return <Assets basePath={basePath} positions={positions} symbols={symbols} closedTrades={closedTrades} closedTradesSummary={closedTradesSummary} />;
+        return <Assets basePath={basePath} positions={positions} symbols={symbols} account={account} serverTrades={closedTrades} serverTradesSummary={closedTradesSummary} />;
       case 'trade':
         return <Trade user={user} account={account} positions={positions} symbols={symbols} />;
       case 'grid-orders':

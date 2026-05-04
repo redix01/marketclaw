@@ -8,8 +8,8 @@ interface AssetsProps {
   positions: Position[];
   symbols: SymbolInfo[];
   account: Account | null;
-  closedTrades: ClosedTrade[];
-  closedTradesSummary: ClosedTradesSummary | null;
+  serverTrades: ClosedTrade[];
+  serverTradesSummary: ClosedTradesSummary | null;
 }
 
 interface GridConfig {
@@ -177,7 +177,7 @@ function tickGrid(config: GridConfig, prevTick: GridTick | undefined, nowMs: num
   return { price, changePercent, unrealizedPnL, realizedPnL, filledLevels };
 }
 
-export default function Assets({ positions, symbols, account, closedTrades, closedTradesSummary }: AssetsProps) {
+export default function Assets({ positions, symbols, account, serverTrades, serverTradesSummary }: AssetsProps) {
   const [tab, setTab] = useState<'detail' | 'history'>('detail');
   const liveSymbols = symbols.length > 0 ? symbols : MOCK_SYMBOLS;
 
@@ -548,7 +548,7 @@ export default function Assets({ positions, symbols, account, closedTrades, clos
         </main>
 
         <div className="border-t border-zinc-800/60 col-span-1 lg:col-span-2">
-          <ClosedTradesSection trades={closedTrades} summary={closedTradesSummary} />
+          <ClosedTradesSection trades={serverTrades} summary={serverTradesSummary} />
         </div>
       </div>
     </div>

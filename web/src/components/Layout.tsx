@@ -80,7 +80,6 @@ export default function Layout({ children, activeTab, basePath, user, account, i
     { id: 'portfolio', label: 'Portfolio', icon: Briefcase },
     { id: 'ai-trader', label: 'AI Trader', icon: BarChart3 },
     { id: 'trade', label: 'Trade', icon: TrendingUp },
-    { id: 'grid-orders', label: 'Grid Orders', icon: ClipboardList },
     { id: 'agents', label: 'Agents', icon: Bot },
     { id: 'logs', label: 'Agent Logs', icon: ScrollText },
     { id: 'wallet', label: 'Wallet', icon: Wallet },
@@ -211,7 +210,7 @@ export default function Layout({ children, activeTab, basePath, user, account, i
             <div className="hidden sm:flex items-center gap-4 md:gap-6 border-r border-zinc-800 pr-4 md:pr-6 mr-1 md:mr-2">
               <div className="text-right">
                 <p className="text-[8px] md:text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Cash Balance</p>
-                <p className="text-xs md:text-sm font-mono text-emerald-400">${account?.cashBalance?.toLocaleString() || '0.00'}</p>
+                <p className="text-xs md:text-sm font-mono text-emerald-400">${Number(account?.cashBalance ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
               </div>
               <div className="text-right hidden lg:block">
                 <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Account Mode</p>
