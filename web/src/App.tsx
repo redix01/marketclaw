@@ -53,7 +53,7 @@ function DashboardShell({
       case 'portfolio':
         return <Portfolio account={account} positions={positions} symbols={symbols} />;
       case 'assets':
-        return <Assets basePath={basePath} positions={positions} symbols={symbols} />;
+        return <Assets basePath={basePath} positions={positions} symbols={symbols} account={account} />;
       case 'trade':
         return <Trade user={user} account={account} positions={positions} symbols={symbols} />;
       case 'orders':

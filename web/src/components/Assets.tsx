@@ -1,87 +1,39 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
-import {
-  ArrowDownRight,
-  ArrowUpRight,
-  BarChart3,
-  Bot,
-  Search,
-  SlidersHorizontal,
-  Target,
-  TrendingDown,
-  TrendingUp,
-} from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ChevronRight, Minus } from 'lucide-react';
 import { MOCK_SYMBOLS } from '../constants';
-import { Position, SymbolInfo } from '../types';
+import { Account, Position, SymbolInfo } from '../types';
 
 interface AssetsProps {
   basePath: '/app' | '/demo';
   positions: Position[];
   symbols: SymbolInfo[];
+  account: Account | null;
 }
 
-type StrategyProfile = 'balanced' | 'momentum' | 'defensive';
-type PriceBand = 'all' | 'under200' | '200to500' | 'over500';
-type VolatilityBand = 'all' | 'steady' | 'active' | 'aggressive';
-
-interface RankedStock extends SymbolInfo {
-  sector: string;
-  liquidityScore: number;
-  volatilityScore: number;
-  trendScore: number;
-  strategyScore: number;
-  confidence: number;
-  gridLower: number;
-  gridUpper: number;
-  gridLevels: number;
-  gridSpacing: number;
-  capitalAllocation: number;
-  estimatedDailyProfit: number;
-  monthlyWinRate: number;
+interface GridConfig {
+  symbol: string;
+  name: string;
+  type: 'stock' | 'crypto';
+  basePrice: number;
+  baseChangePercent: number;
+  leverage: number;
+  margin: number;
+  exposurePercent: number;
+  rangePercent: number;
+  totalLevels: number;
+  filledLevels: number;
+  realizedPnL: number;
+  unrealizedPnL: number;
+  durationMinutes: number;
+  active: boolean;
 }
 
-const SECTOR_MAP: Record<string, string> = {
-  AAPL: 'Consumer Tech',
-  TSLA: 'Mobility',
-  NVDA: 'AI Infrastructure',
-  META: 'Digital Media',
-  NFLX: 'Media',
-  AMD: 'Semiconductors',
-  INTC: 'Semiconductors',
-  ORCL: 'Enterprise Software',
-  CRM: 'Enterprise Software',
-  JPM: 'Financials',
-  BAC: 'Financials',
-  DIS: 'Consumer Media',
-  MSFT: 'Cloud',
-  GOOGL: 'Advertising',
-  AMZN: 'Commerce',
-};
-
-const PROFILE_COPY: Record<StrategyProfile, { label: string; description: string }> = {
-  balanced: {
-    label: 'Balanced Scan',
-    description: 'Mixes liquidity, trend strength, and contained volatility for durable grid rotation.',
-  },
-  momentum: {
-    label: 'Momentum Scan',
-    description: 'Prioritizes strong directional flow and wider bands for faster grid turnover.',
-  },
-  defensive: {
-    label: 'Defensive Scan',
-    description: 'Favors lower-volatility names with tighter ladders and smaller downside excursions.',
-  },
-};
-
-function formatCurrency(value: number, maximumFractionDigits = 2) {
-  return `$${value.toLocaleString(undefined, {
-    minimumFractionDigits: maximumFractionDigits === 0 ? 0 : 2,
-    maximumFractionDigits,
-  })}`;
-}
-
-function formatSigned(value: number, suffix = '') {
-  return `${value >= 0 ? '+' : ''}${value.toFixed(2)}${suffix}`;
+interface GridTick {
+  price: number;
+  changePercent: number;
+  unrealizedPnL: number;
+  realizedPnL: number;
+  filledLevels: number;
 }
 
 function symbolSeed(symbol: string) {
@@ -92,575 +44,509 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
-function matchesPriceBand(price: number, band: PriceBand) {
-  if (band === 'under200') return price < 200;
-  if (band === '200to500') return price >= 200 && price <= 500;
-  if (band === 'over500') return price > 500;
-  return true;
+function formatPrice(value: number) {
+  if (value >= 1000) return value.toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 });
+  if (value >= 10) return value.toFixed(4);
+  if (value >= 1) return value.toFixed(4);
+  return value.toFixed(6);
 }
 
-function matchesVolatilityBand(volatilityScore: number, band: VolatilityBand) {
-  if (band === 'steady') return volatilityScore < 4.5;
-  if (band === 'active') return volatilityScore >= 4.5 && volatilityScore < 6.6;
-  if (band === 'aggressive') return volatilityScore >= 6.6;
-  return true;
+function formatMoney(value: number, digits = 2) {
+  return `$${value.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
 }
 
-function buildRankedStock(symbol: SymbolInfo, profile: StrategyProfile): RankedStock {
+function formatSignedMoney(value: number, digits = 4) {
+  const sign = value >= 0 ? '+' : '-';
+  return `${sign}$${Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
+}
+
+function formatDuration(totalMinutes: number) {
+  const minutes = Math.max(0, Math.floor(totalMinutes));
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  if (hours >= 24) {
+    const days = Math.floor(hours / 24);
+    return `${days}d ${hours % 24}h`;
+  }
+  return `${hours}h ${mins.toString().padStart(2, '0')}m`;
+}
+
+function buildGrid(symbol: SymbolInfo, index: number): GridConfig {
   const seed = symbolSeed(symbol.symbol);
-  const priceDrift = ((seed % 9) - 4) * 0.22;
-  const volatilityScore = clamp(Math.abs(symbol.changePercent) * 1.35 + (seed % 5) + 1.8, 2.2, 9.4);
-  const liquidityScore = clamp(5.4 + ((seed % 11) * 0.34), 4.8, 9.7);
-  const trendScore = clamp(5 + symbol.changePercent * 1.65 + priceDrift, 1.8, 9.8);
-
-  const scoreByProfile = {
-    balanced: liquidityScore * 0.4 + volatilityScore * 0.35 + trendScore * 0.25,
-    momentum: trendScore * 0.5 + volatilityScore * 0.35 + liquidityScore * 0.15,
-    defensive: liquidityScore * 0.45 + (10 - volatilityScore) * 0.3 + trendScore * 0.25,
-  };
-
-  const strategyScore = clamp(scoreByProfile[profile], 1, 9.9);
-  const rangePercent = clamp(volatilityScore * 0.65, 1.8, 6.8);
-  const gridLevels = clamp(Math.round(5 + volatilityScore / 1.55), 5, 9);
-  const gridLower = symbol.price * (1 - rangePercent / 100);
-  const gridUpper = symbol.price * (1 + rangePercent / 100);
-  const gridSpacing = (gridUpper - gridLower) / (gridLevels - 1);
-  const capitalAllocation = clamp(symbol.price * (18 + volatilityScore * 4.8), 3500, 24000);
-  const estimatedDailyProfit = capitalAllocation * ((0.38 + volatilityScore * 0.11) / 100);
-  const confidence = clamp(58 + strategyScore * 3.6, 61, 93);
-  const monthlyWinRate = clamp(54 + strategyScore * 3.1 - Math.max(0, volatilityScore - 6.5) * 1.8, 56, 82);
+  const totalLevels = clamp(10 + ((seed + index) % 18), 10, 28);
+  const filledLevels = (seed + index * 3) % (totalLevels + 1);
+  const margin = clamp(8 + (seed % 11) + index * 0.4, 8, 50);
+  const rangePercent = clamp(2 + ((seed % 13) * 0.6), 1.8, 9.5);
+  const baseRealized = ((seed % 23) - 8) * 0.012;
+  const active = (seed + index) % 5 !== 0;
+  const durationMinutes = 60 + ((seed * 7 + index * 11) % 1800);
+  const baseUnrealized = active ? ((seed % 7) - 3) * 0.0185 : 0;
 
   return {
-    ...symbol,
-    sector: SECTOR_MAP[symbol.symbol] ?? 'Large Cap',
-    liquidityScore,
-    volatilityScore,
-    trendScore,
-    strategyScore,
-    confidence,
-    gridLower,
-    gridUpper,
-    gridLevels,
-    gridSpacing,
-    capitalAllocation,
-    estimatedDailyProfit,
-    monthlyWinRate,
+    symbol: symbol.symbol,
+    name: symbol.name,
+    type: symbol.type,
+    basePrice: symbol.price,
+    baseChangePercent: symbol.changePercent,
+    leverage: 50,
+    margin,
+    exposurePercent: clamp((margin / 192) * 100, 0.6, 28),
+    rangePercent,
+    totalLevels,
+    filledLevels,
+    realizedPnL: baseRealized,
+    unrealizedPnL: baseUnrealized,
+    durationMinutes,
+    active,
   };
 }
 
-export default function Assets({ basePath, positions, symbols }: AssetsProps) {
-  const [search, setSearch] = useState('');
-  const [profile, setProfile] = useState<StrategyProfile>('balanced');
-  const [priceBand, setPriceBand] = useState<PriceBand>('all');
-  const [volatilityBand, setVolatilityBand] = useState<VolatilityBand>('active');
-  const [selectedSector, setSelectedSector] = useState<string>('all');
+function tickGrid(config: GridConfig, prevTick: GridTick | undefined, nowMs: number): GridTick {
+  const seed = symbolSeed(config.symbol);
+  const slow = Math.sin(nowMs / 7300 + seed) * 0.0008;
+  const fast = Math.sin(nowMs / 1100 + seed * 1.7) * 0.0011;
+  const drift = slow + fast;
 
+  const prevPrice = prevTick?.price ?? config.basePrice;
+  const targetPrice = config.basePrice * (1 + drift);
+  const price = prevPrice + (targetPrice - prevPrice) * 0.18;
+
+  const changePercent = ((price - config.basePrice) / config.basePrice) * 100 + config.baseChangePercent;
+  const unrealizedPnL = config.active
+    ? config.margin * (config.unrealizedPnL + Math.sin(nowMs / 4200 + seed) * 0.01)
+    : 0;
+  const realizedPnL = config.margin * config.realizedPnL + Math.sin(nowMs / 9100 + seed * 0.6) * 0.05;
+
+  const fillJitter = Math.floor((Math.sin(nowMs / 6500 + seed) + 1) * 1.5);
+  const filledLevels = clamp(config.filledLevels + fillJitter, 0, config.totalLevels);
+
+  return { price, changePercent, unrealizedPnL, realizedPnL, filledLevels };
+}
+
+export default function Assets({ positions, symbols, account }: AssetsProps) {
+  const [tab, setTab] = useState<'detail' | 'history'>('detail');
   const liveSymbols = symbols.length > 0 ? symbols : MOCK_SYMBOLS;
-  const stockUniverse = useMemo(
-    () => liveSymbols.filter((symbol) => symbol.type === 'stock').map((symbol) => buildRankedStock(symbol, profile)),
-    [liveSymbols, profile]
+
+  const grids = useMemo<GridConfig[]>(
+    () => liveSymbols.map((symbol, index) => buildGrid(symbol, index)),
+    [liveSymbols]
   );
 
-  const sectors = useMemo(
-    () => ['all', ...new Set(stockUniverse.map((symbol) => symbol.sector))],
-    [stockUniverse]
-  );
-
-  const filteredStocks = useMemo(() => {
-    return stockUniverse
-      .filter((symbol) => matchesPriceBand(symbol.price, priceBand))
-      .filter((symbol) => matchesVolatilityBand(symbol.volatilityScore, volatilityBand))
-      .filter((symbol) => selectedSector === 'all' || symbol.sector === selectedSector)
-      .filter((symbol) => {
-        const query = search.trim().toLowerCase();
-        if (!query) return true;
-        return (
-          symbol.symbol.toLowerCase().includes(query) ||
-          symbol.name.toLowerCase().includes(query) ||
-          symbol.sector.toLowerCase().includes(query)
-        );
-      })
-      .sort((left, right) => right.strategyScore - left.strategyScore);
-  }, [priceBand, search, selectedSector, stockUniverse, volatilityBand]);
-
-  const autoSelectedStocks = filteredStocks.slice(0, 6);
-  const [selectedSymbolId, setSelectedSymbolId] = useState(autoSelectedStocks[0]?.symbol || stockUniverse[0]?.symbol || 'AAPL');
+  const [selectedSymbol, setSelectedSymbol] = useState<string>(grids[0]?.symbol ?? '');
+  const [ticks, setTicks] = useState<Record<string, GridTick>>({});
+  const ticksRef = useRef<Record<string, GridTick>>({});
+  ticksRef.current = ticks;
 
   useEffect(() => {
-    if (autoSelectedStocks.length === 0) {
-      return;
+    if (!grids.some((grid) => grid.symbol === selectedSymbol)) {
+      setSelectedSymbol(grids[0]?.symbol ?? '');
     }
+  }, [grids, selectedSymbol]);
 
-    if (!autoSelectedStocks.some((symbol) => symbol.symbol === selectedSymbolId)) {
-      setSelectedSymbolId(autoSelectedStocks[0].symbol);
-    }
-  }, [autoSelectedStocks, selectedSymbolId]);
+  useEffect(() => {
+    let frame: number;
+    let last = 0;
 
-  const selectedStock =
-    autoSelectedStocks.find((symbol) => symbol.symbol === selectedSymbolId) ||
-    filteredStocks[0] ||
-    stockUniverse[0];
+    const loop = (now: number) => {
+      if (now - last >= 750) {
+        last = now;
+        const next: Record<string, GridTick> = {};
+        for (const grid of grids) {
+          next[grid.symbol] = tickGrid(grid, ticksRef.current[grid.symbol], now);
+        }
+        setTicks(next);
+      }
+      frame = window.requestAnimationFrame(loop);
+    };
 
-  const selectedHolding = positions.find((position) => position.symbol === selectedStock?.symbol);
+    frame = window.requestAnimationFrame(loop);
+    return () => window.cancelAnimationFrame(frame);
+  }, [grids]);
 
-  const gridLevels = useMemo(() => {
-    if (!selectedStock) {
-      return [];
-    }
+  const enriched = useMemo(
+    () =>
+      grids.map((grid) => {
+        const tick = ticks[grid.symbol];
+        return {
+          grid,
+          price: tick?.price ?? grid.basePrice,
+          changePercent: tick?.changePercent ?? grid.baseChangePercent,
+          unrealizedPnL: tick?.unrealizedPnL ?? 0,
+          realizedPnL: tick?.realizedPnL ?? grid.margin * grid.realizedPnL,
+          filledLevels: tick?.filledLevels ?? grid.filledLevels,
+        };
+      }),
+    [grids, ticks]
+  );
 
-    const midpoint = Math.floor(selectedStock.gridLevels / 2);
+  const selected = enriched.find((entry) => entry.grid.symbol === selectedSymbol) ?? enriched[0];
 
-    return Array.from({ length: selectedStock.gridLevels }, (_, index) => {
-      const price = selectedStock.gridLower + selectedStock.gridSpacing * index;
-      const quantity = Math.max(1, Math.floor((selectedStock.capitalAllocation / selectedStock.gridLevels) / price));
-      const distance = index - midpoint;
+  const wallet = account?.cashBalance ?? 192.23;
+  const totalMargin = enriched.reduce((sum, entry) => sum + entry.grid.margin, 0);
+  const totalRealized = enriched.reduce((sum, entry) => sum + entry.realizedPnL, 0);
+  const totalUnrealized = enriched.reduce((sum, entry) => sum + entry.unrealizedPnL, 0);
+  const totalPnL = totalRealized + totalUnrealized;
+  const pnlPercent = wallet > 0 ? (totalPnL / wallet) * 100 : 0;
+  const exposurePercent = wallet > 0 ? clamp((totalMargin / wallet) * 100, 0, 100) : 0;
+  const activeCount = enriched.filter((entry) => entry.grid.active).length;
+  const closedCount = 1523;
+  const wins = 1211;
+  const losses = 312;
+  const winRate = Math.round((wins / (wins + losses)) * 100);
+  const sessionDuration = '14h 27m';
 
+  const fillProgressBars = useMemo(() => {
+    if (!selected) return [] as { active: boolean; filled: boolean }[];
+    return Array.from({ length: selected.grid.totalLevels }, (_, index) => ({
+      filled: index < selected.filledLevels,
+      active: index === selected.filledLevels - 1,
+    }));
+  }, [selected]);
+
+  const historyRows = useMemo(() => {
+    if (!selected) return [] as { id: string; time: string; side: 'Buy' | 'Sell'; price: number; size: number; pnl: number }[];
+    const seed = symbolSeed(selected.grid.symbol);
+    const now = Date.now();
+    const rangeStep = (selected.grid.basePrice * selected.grid.rangePercent) / 100 / Math.max(selected.grid.totalLevels, 1);
+
+    return Array.from({ length: 8 }, (_, index) => {
+      const buy = (seed + index) % 2 === 0;
+      const offset = (index - 3) * rangeStep;
       return {
-        level: selectedStock.gridLevels - index,
-        price,
-        quantity,
-        zone: distance < 0 ? 'Accumulation' : distance > 0 ? 'Distribution' : 'Anchor',
-        action: distance < 0 ? 'Buy' : distance > 0 ? 'Sell' : 'Hold',
-        active: Math.abs(price - selectedStock.price) <= selectedStock.gridSpacing / 1.8,
-      };
-    }).reverse();
-  }, [selectedStock]);
-
-  const recentExecutions = useMemo(() => {
-    if (!selectedStock) {
-      return [];
-    }
-
-    const now = new Date();
-    const seed = symbolSeed(selectedStock.symbol);
-
-    return Array.from({ length: 5 }, (_, index) => {
-      const direction = index % 2 === 0 ? 'Buy' : 'Sell';
-      const priceOffset = (2 - index) * (selectedStock.gridSpacing * 0.55);
-      const fillPrice = selectedStock.price - priceOffset;
-      const realizedPnL = selectedStock.estimatedDailyProfit * (0.16 + index * 0.06);
-      const filledAt = new Date(now.getTime() - (index + 1) * 42 * 60 * 1000 - (seed % 18) * 60000);
-
-      return {
-        id: `${selectedStock.symbol}-${index}`,
-        direction,
-        fillPrice,
-        quantity: Math.max(2, Math.floor((selectedStock.capitalAllocation / 10) / fillPrice)),
-        realizedPnL,
-        filledAt: new Intl.DateTimeFormat(undefined, {
-          hour: '2-digit',
-          minute: '2-digit',
-        }).format(filledAt),
+        id: `${selected.grid.symbol}-${index}`,
+        time: new Date(now - (index * 6 + (seed % 7)) * 60_000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        side: (buy ? 'Buy' : 'Sell') as 'Buy' | 'Sell',
+        price: selected.grid.basePrice + offset,
+        size: clamp(0.4 + ((seed + index) % 6) * 0.18, 0.4, 1.6),
+        pnl: ((seed + index * 3) % 9 - 3) * 0.018,
       };
     });
-  }, [selectedStock]);
-
-  const summaryCards = [
-    { label: 'Universe Scanned', value: stockUniverse.length.toString(), hint: 'US equities only' },
-    { label: 'Qualified Stocks', value: filteredStocks.length.toString(), hint: 'Passing active filters' },
-    { label: 'Grid Basket', value: autoSelectedStocks.length.toString(), hint: 'Auto-selected entries' },
-    {
-      label: 'Projected Daily Edge',
-      value: formatCurrency(autoSelectedStocks.reduce((total, stock) => total + stock.estimatedDailyProfit, 0), 0),
-      hint: 'Modeled net capture',
-    },
-  ];
+  }, [selected]);
 
   return (
-    <div className="space-y-6">
-      <div className="bg-[#0F0F11] border border-zinc-800/50 rounded-3xl p-6 md:p-8 overflow-hidden relative">
-        <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_top_right,rgba(250,204,21,0.18),transparent_35%),radial-gradient(circle_at_bottom_left,rgba(251,191,36,0.14),transparent_28%)]" />
-        <div className="relative flex flex-col gap-6">
-          <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
-            <div className="max-w-3xl">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-yellow-500/25 bg-yellow-500/10 text-yellow-300 text-[10px] font-bold uppercase tracking-[0.2em] mb-4">
-                <span className="w-2 h-2 rounded-full bg-yellow-300 animate-pulse" />
-                Automated grid engine
+    <div className="bg-[#0A0A0B] border border-zinc-800/50 rounded-3xl overflow-hidden">
+      <div className="grid grid-cols-1 lg:grid-cols-[340px_1fr]">
+        <aside className="border-b lg:border-b-0 lg:border-r border-zinc-800/60 flex flex-col">
+          <div className="p-5 border-b border-zinc-800/60">
+            <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500 font-bold mb-4">Trading Stats</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold">Wallet</p>
+                <p className="mt-1 text-2xl font-mono text-white">{formatMoney(wallet)}</p>
+                <p className="mt-1 text-[10px] text-yellow-300/80 font-bold">{exposurePercent.toFixed(1)}% exposed</p>
               </div>
-              <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-white">Auto-select stocks, set the ladder, and harvest the range.</h2>
-              <p className="mt-3 text-sm md:text-base text-zinc-400 max-w-2xl">
-                The engine scans the market, ranks liquid names that fit your filter set, then deploys a price grid that buys weakness and sells strength inside a defined channel.
-              </p>
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold">PNL</p>
+                <p className={`mt-1 text-2xl font-mono ${totalPnL >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  {formatSignedMoney(totalPnL, 2)}
+                </p>
+                <p className={`mt-1 text-[10px] font-bold ${totalPnL >= 0 ? 'text-emerald-400/80' : 'text-rose-400/80'}`}>
+                  {pnlPercent >= 0 ? '+' : ''}{pnlPercent.toFixed(2)}%
+                </p>
+              </div>
+              <div className="col-span-2 grid grid-cols-2 gap-2 mt-1">
+                <div className="rounded-md bg-emerald-500/10 border border-emerald-500/20 px-2 py-1">
+                  <p className="text-[9px] uppercase tracking-wider text-emerald-400/80 font-bold">R</p>
+                  <p className="text-xs font-mono text-emerald-300">{formatSignedMoney(totalRealized, 2)}</p>
+                </div>
+                <div className="rounded-md bg-rose-500/10 border border-rose-500/20 px-2 py-1">
+                  <p className="text-[9px] uppercase tracking-wider text-rose-400/80 font-bold">U</p>
+                  <p className="text-xs font-mono text-rose-300">{formatSignedMoney(totalUnrealized, 2)}</p>
+                </div>
+              </div>
             </div>
 
-            <div className="rounded-3xl border border-yellow-500/15 bg-black/25 px-5 py-4 min-w-[280px]">
-              <p className="text-[10px] uppercase tracking-[0.18em] text-zinc-500 font-bold">Active mode</p>
-              <div className="mt-3 flex items-start gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-yellow-500/10 border border-yellow-500/20 flex items-center justify-center">
-                  <Bot size={18} className="text-yellow-300" />
-                </div>
-                <div>
-                  <p className="text-sm font-bold text-white">{PROFILE_COPY[profile].label}</p>
-                  <p className="mt-1 text-xs text-zinc-400 max-w-xs">{PROFILE_COPY[profile].description}</p>
-                </div>
+            <div className="grid grid-cols-2 gap-3 mt-5 pt-4 border-t border-zinc-800/60">
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold">Closed</p>
+                <p className="mt-1 text-xl font-mono text-white">{closedCount.toLocaleString()}</p>
+                <p className="mt-1 text-[10px] text-zinc-500">{wins}W / {losses}L</p>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold">Active</p>
+                <p className="mt-1 text-xl font-mono text-white">{sessionDuration}</p>
+                <p className="mt-1 text-[10px] text-emerald-400/80 font-bold">{winRate}% win</p>
               </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {summaryCards.map((card) => (
-              <div key={card.label} className="rounded-2xl border border-zinc-800/70 bg-black/20 px-4 py-3">
-                <p className="text-[10px] uppercase tracking-[0.18em] text-zinc-500 font-bold">{card.label}</p>
-                <p className="mt-2 text-2xl font-mono font-bold text-white">{card.value}</p>
-                <p className="mt-1 text-[11px] text-zinc-500">{card.hint}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 xl:grid-cols-[1.45fr_0.95fr] gap-6">
-        <div className="space-y-6">
-          <div className="bg-[#0F0F11] border border-zinc-800/50 rounded-3xl p-6">
-            <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between mb-5">
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <SlidersHorizontal size={16} className="text-yellow-300" />
-                  <p className="text-[10px] uppercase tracking-[0.18em] text-zinc-500 font-bold">Auto-selection filters</p>
-                </div>
-                <h3 className="text-lg font-bold">Market scan controls</h3>
-                <p className="text-xs text-zinc-500">Change the ranking model, price band, or volatility appetite and the basket rebalances instantly.</p>
-              </div>
-
-              <div className="relative w-full md:w-[260px]">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={18} />
-                <input
-                  type="text"
-                  placeholder="Search stock, company, sector..."
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  className="w-full bg-zinc-900/50 border border-zinc-800 rounded-2xl py-3 pl-10 pr-4 text-sm focus:outline-none focus:border-yellow-500/50 transition-all"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <p className="text-[10px] uppercase tracking-[0.18em] text-zinc-500 font-bold mb-2">Strategy profile</p>
-                <div className="flex flex-wrap gap-2">
-                  {(['balanced', 'momentum', 'defensive'] as StrategyProfile[]).map((option) => (
-                    <button
-                      key={option}
-                      onClick={() => setProfile(option)}
-                      className={`px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-wider border transition-all ${
-                        profile === option
-                          ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-300'
-                          : 'border-zinc-800 text-zinc-500 hover:border-zinc-700'
-                      }`}
-                    >
-                      {PROFILE_COPY[option].label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="grid md:grid-cols-3 gap-3">
-                <div>
-                  <p className="text-[10px] uppercase tracking-[0.18em] text-zinc-500 font-bold mb-2">Price band</p>
-                  <div className="flex flex-wrap gap-2">
-                    {[
-                      { key: 'all', label: 'Any' },
-                      { key: 'under200', label: '< $200' },
-                      { key: '200to500', label: '$200-$500' },
-                      { key: 'over500', label: '> $500' },
-                    ].map((option) => (
-                      <button
-                        key={option.key}
-                        onClick={() => setPriceBand(option.key as PriceBand)}
-                        className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all ${
-                          priceBand === option.key
-                            ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-300'
-                            : 'border-zinc-800 text-zinc-500 hover:border-zinc-700'
-                        }`}
-                      >
-                        {option.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <p className="text-[10px] uppercase tracking-[0.18em] text-zinc-500 font-bold mb-2">Volatility</p>
-                  <div className="flex flex-wrap gap-2">
-                    {[
-                      { key: 'all', label: 'All' },
-                      { key: 'steady', label: 'Steady' },
-                      { key: 'active', label: 'Active' },
-                      { key: 'aggressive', label: 'High Beta' },
-                    ].map((option) => (
-                      <button
-                        key={option.key}
-                        onClick={() => setVolatilityBand(option.key as VolatilityBand)}
-                        className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all ${
-                          volatilityBand === option.key
-                            ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-300'
-                            : 'border-zinc-800 text-zinc-500 hover:border-zinc-700'
-                        }`}
-                      >
-                        {option.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <p className="text-[10px] uppercase tracking-[0.18em] text-zinc-500 font-bold mb-2">Sector</p>
-                  <div className="flex flex-wrap gap-2">
-                    {sectors.map((sector) => (
-                      <button
-                        key={sector}
-                        onClick={() => setSelectedSector(sector)}
-                        className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all ${
-                          selectedSector === sector
-                            ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-300'
-                            : 'border-zinc-800 text-zinc-500 hover:border-zinc-700'
-                        }`}
-                      >
-                        {sector === 'all' ? 'All sectors' : sector}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
+          <div className="px-5 pt-4 pb-2 flex items-center justify-between">
+            <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500 font-bold">Active Grids</p>
+            <span className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded-full bg-emerald-500/15 text-emerald-300 text-[10px] font-bold border border-emerald-500/25">
+              {activeCount}
+            </span>
           </div>
 
-          <div className="bg-[#0F0F11] border border-zinc-800/50 rounded-3xl p-6">
-            <div className="flex items-center justify-between gap-3 mb-5">
-              <div>
-                <p className="text-[10px] uppercase tracking-[0.18em] text-zinc-500 font-bold">Auto-selected basket</p>
-                <h3 className="text-lg font-bold mt-1">Grid-ready stocks</h3>
-              </div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-yellow-500/20 bg-yellow-500/10 px-3 py-1 text-[11px] font-bold text-yellow-300">
-                <Target size={12} />
-                Top ranked by current filter set
-              </div>
-            </div>
+          <div className="flex-1 overflow-y-auto max-h-[640px] px-2 pb-3 space-y-1">
+            {enriched.map((entry) => {
+              const { grid } = entry;
+              const isSelected = grid.symbol === selectedSymbol;
+              const fillRatio = grid.totalLevels > 0 ? entry.filledLevels / grid.totalLevels : 0;
+              const pnl = entry.unrealizedPnL;
+              const positive = pnl >= 0;
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {autoSelectedStocks.map((symbol, index) => (
+              return (
                 <button
-                  key={symbol.symbol}
-                  onClick={() => setSelectedSymbolId(symbol.symbol)}
-                  className={`text-left p-4 rounded-2xl border transition-all ${
-                    selectedStock?.symbol === symbol.symbol
-                      ? 'bg-yellow-500/5 border-yellow-500/30 ring-1 ring-yellow-500/25'
-                      : 'bg-zinc-900/30 border-zinc-800 hover:border-zinc-700'
+                  key={grid.symbol}
+                  onClick={() => setSelectedSymbol(grid.symbol)}
+                  className={`w-full text-left px-3 py-3 rounded-lg border transition-colors flex flex-col gap-2 ${
+                    isSelected
+                      ? 'bg-yellow-500/[0.06] border-yellow-400/40'
+                      : 'bg-transparent border-transparent hover:bg-zinc-900/50 hover:border-zinc-800'
                   }`}
                 >
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] px-2 py-0.5 rounded-full border border-yellow-500/20 bg-yellow-500/10 text-yellow-300 font-bold">
-                          #{index + 1}
-                        </span>
-                        <span className="text-sm font-bold text-white">{symbol.symbol}</span>
-                      </div>
-                      <p className="mt-2 text-xs text-zinc-400">{symbol.name}</p>
-                      <p className="mt-1 text-[11px] text-zinc-500">{symbol.sector}</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Minus size={12} className={isSelected ? 'text-yellow-300' : 'text-zinc-600'} />
+                      <span className="font-bold text-white text-sm truncate">{grid.symbol}</span>
                     </div>
-                    <div className="text-right">
-                      <p className="text-sm font-mono font-bold text-white">{formatCurrency(symbol.price)}</p>
-                      <div className={`mt-1 text-[10px] font-bold flex items-center justify-end gap-1 ${symbol.change >= 0 ? 'text-yellow-300' : 'text-rose-400'}`}>
-                        {symbol.change >= 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
-                        {formatSigned(symbol.changePercent, '%')}
-                      </div>
+                    <span className={`font-mono text-xs ${positive ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {formatSignedMoney(pnl, 4)}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[10px] text-zinc-500 -mt-1 ml-5">
+                    <span>{grid.symbol}/USDT · <span className="font-mono text-zinc-400">{formatPrice(entry.price)}</span></span>
+                    {isSelected && <ChevronRight size={12} className="text-yellow-300" />}
+                  </div>
+
+                  <div className="flex items-center justify-between text-[10px] ml-5">
+                    <span className="text-zinc-500">
+                      <span className="text-zinc-300 font-bold">{grid.leverage}x</span>
+                      <span className="mx-1.5 text-zinc-700">·</span>
+                      <span className="font-mono">${grid.margin.toFixed(2)}</span>
+                      <span className="mx-1.5 text-zinc-700">·</span>
+                      <span>{(grid.durationMinutes < 60 ? `${grid.durationMinutes}s` : `${Math.round(grid.durationMinutes / 60)}m`)}</span>
+                      <span className="mx-1.5 text-zinc-700">·</span>
+                      <span className="text-yellow-300 font-bold">{grid.exposurePercent.toFixed(1)}%</span>
+                    </span>
+                  </div>
+
+                  <div className="ml-5 mr-1">
+                    <div className="h-[3px] rounded-full bg-zinc-800 overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-300 transition-[width] duration-700 ease-out"
+                        style={{ width: `${fillRatio * 100}%` }}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between mt-1 text-[10px] font-mono">
+                      <span className="text-zinc-600">{formatPrice(grid.basePrice * (1 - grid.rangePercent / 100))}</span>
+                      <span className="text-zinc-500">{entry.filledLevels}/{grid.totalLevels}</span>
+                      <span className="text-zinc-600">{formatPrice(grid.basePrice * (1 + grid.rangePercent / 100))}</span>
                     </div>
                   </div>
 
-                  <div className="mt-4 grid grid-cols-3 gap-2">
-                    <div className="rounded-xl bg-black/20 border border-zinc-800/70 px-3 py-2">
-                      <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Score</p>
-                      <p className="mt-1 text-sm font-mono font-bold text-white">{symbol.strategyScore.toFixed(1)}</p>
-                    </div>
-                    <div className="rounded-xl bg-black/20 border border-zinc-800/70 px-3 py-2">
-                      <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Grid</p>
-                      <p className="mt-1 text-sm font-mono font-bold text-white">{symbol.gridLevels} lvls</p>
-                    </div>
-                    <div className="rounded-xl bg-black/20 border border-zinc-800/70 px-3 py-2">
-                      <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Daily Edge</p>
-                      <p className="mt-1 text-sm font-mono font-bold text-white">{formatCurrency(symbol.estimatedDailyProfit, 0)}</p>
-                    </div>
+                  <div className="ml-5 flex items-center gap-3 text-[10px] font-mono">
+                    <span className="text-zinc-500">R: <span className={entry.realizedPnL >= 0 ? 'text-emerald-400' : 'text-rose-400'}>{formatSignedMoney(entry.realizedPnL, 4)}</span></span>
+                    <span className="text-zinc-500">U: <span className={pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}>{formatSignedMoney(pnl, 4)}</span></span>
                   </div>
+                </button>
+              );
+            })}
+          </div>
+        </aside>
+
+        <main className="flex flex-col">
+          <div className="border-b border-zinc-800/60 px-6 pt-5">
+            <div className="flex items-center gap-6">
+              {(['detail', 'history'] as const).map((value) => (
+                <button
+                  key={value}
+                  onClick={() => setTab(value)}
+                  className={`pb-3 text-[11px] uppercase tracking-[0.22em] font-bold border-b-2 transition-colors ${
+                    tab === value
+                      ? 'text-white border-yellow-400'
+                      : 'text-zinc-500 border-transparent hover:text-zinc-300'
+                  }`}
+                >
+                  {value}
                 </button>
               ))}
             </div>
-
-            {autoSelectedStocks.length === 0 && (
-              <div className="p-10 border border-dashed border-zinc-800 rounded-2xl text-center text-zinc-500 mt-4">
-                No stocks matched the current grid filter set.
-              </div>
-            )}
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-[#0F0F11] border border-zinc-800/50 rounded-3xl p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <BarChart3 size={18} className="text-yellow-300" />
-                <h3 className="text-lg font-bold">Grid ladder</h3>
-              </div>
-              <div className="space-y-3">
-                {gridLevels.map((level) => (
-                  <div
-                    key={`${level.level}-${level.price}`}
-                    className={`rounded-2xl border px-4 py-3 flex items-center justify-between gap-3 ${
-                      level.active
-                        ? 'border-yellow-500/30 bg-yellow-500/10'
-                        : 'border-zinc-800/70 bg-zinc-900/30'
-                    }`}
-                  >
-                    <div>
-                      <p className="text-sm font-bold text-white">Level {level.level}</p>
-                      <p className="text-[11px] text-zinc-500">{level.zone} zone</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-mono font-bold text-white">{formatCurrency(level.price)}</p>
-                      <p className={`text-[11px] font-bold ${level.action === 'Sell' ? 'text-yellow-300' : level.action === 'Buy' ? 'text-sky-300' : 'text-zinc-400'}`}>
-                        {level.action} {level.quantity} sh
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="bg-[#0F0F11] border border-zinc-800/50 rounded-3xl p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <Bot size={18} className="text-yellow-300" />
-                <h3 className="text-lg font-bold">Execution loop</h3>
-              </div>
-              <div className="space-y-3">
-                {recentExecutions.map((execution) => (
-                  <div key={execution.id} className="rounded-2xl border border-zinc-800/70 bg-zinc-900/30 px-4 py-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-bold text-white">{execution.direction} fill</p>
-                        <p className="text-[11px] text-zinc-500">{execution.filledAt} local time</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-mono font-bold text-white">{formatCurrency(execution.fillPrice)}</p>
-                        <p className="text-[11px] text-zinc-500">{execution.quantity} shares</p>
-                      </div>
-                    </div>
-                    <div className="mt-3 flex items-center justify-between text-[11px]">
-                      <span className="text-zinc-500">Realized spread capture</span>
-                      <span className="font-bold text-yellow-300">{formatCurrency(execution.realizedPnL)}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="space-y-6">
-          <div className="bg-[#0F0F11] border border-zinc-800/50 rounded-3xl p-6 sticky top-24">
-            <div className="flex items-center justify-between gap-4 mb-4">
-              <div>
-                <p className="text-[10px] uppercase tracking-[0.18em] text-zinc-500 font-bold">Selected engine</p>
-                <h3 className="text-2xl font-bold mt-1">{selectedStock?.symbol ?? 'No symbol'}</h3>
-              </div>
-              <Link
-                to={`${basePath}/trade`}
-                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-yellow-500/20 bg-yellow-500/10 text-yellow-300 text-xs font-bold uppercase tracking-wider"
-              >
-                Open trade
-                <ArrowUpRight size={14} />
-              </Link>
-            </div>
-
-            {selectedStock ? (
-              <>
-                <div className="rounded-2xl border border-zinc-800 bg-black/20 p-4 mb-4">
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <p className="text-xs text-zinc-500 font-medium">{selectedStock.name}</p>
-                      <p className="mt-2 text-3xl font-mono font-bold text-white">{formatCurrency(selectedStock.price)}</p>
-                      <p className="mt-1 text-[11px] text-zinc-500">{selectedStock.sector}</p>
-                    </div>
-                    <div className={`inline-flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-bold ${selectedStock.change >= 0 ? 'text-yellow-300 bg-yellow-500/10' : 'text-rose-400 bg-rose-500/10'}`}>
-                      {selectedStock.change >= 0 ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />}
-                      {formatSigned(selectedStock.change, '')} ({formatSigned(selectedStock.changePercent, '%')})
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 mb-4">
-                  <div className="rounded-2xl border border-zinc-800/70 bg-zinc-900/30 p-4">
-                    <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold mb-1">Range floor</p>
-                    <p className="text-sm font-bold">{formatCurrency(selectedStock.gridLower)}</p>
-                  </div>
-                  <div className="rounded-2xl border border-zinc-800/70 bg-zinc-900/30 p-4">
-                    <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold mb-1">Range ceiling</p>
-                    <p className="text-sm font-bold">{formatCurrency(selectedStock.gridUpper)}</p>
-                  </div>
-                  <div className="rounded-2xl border border-zinc-800/70 bg-zinc-900/30 p-4">
-                    <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold mb-1">Grid spacing</p>
-                    <p className="text-sm font-bold">{formatCurrency(selectedStock.gridSpacing)}</p>
-                  </div>
-                  <div className="rounded-2xl border border-zinc-800/70 bg-zinc-900/30 p-4">
-                    <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold mb-1">Holding</p>
-                    <p className="text-sm font-bold">{selectedHolding?.quantity ?? 0} shares</p>
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-yellow-500/15 bg-yellow-500/5 p-4 mb-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-[10px] uppercase tracking-[0.18em] text-zinc-500 font-bold">Profit configuration</p>
-                      <p className="mt-2 text-sm font-bold text-white">{selectedStock.gridLevels} ladder levels across {formatCurrency(selectedStock.gridUpper - selectedStock.gridLower)}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-[10px] uppercase tracking-[0.18em] text-zinc-500 font-bold">Expected daily capture</p>
-                      <p className="mt-2 text-xl font-mono font-bold text-yellow-300">{formatCurrency(selectedStock.estimatedDailyProfit, 0)}</p>
-                    </div>
-                  </div>
-                  <p className="mt-3 text-xs text-zinc-400">
-                    The bot distributes capital across buy and sell steps, recycles filled inventory through the band, and exits partial size each time price re-enters the upper ladder.
-                  </p>
-                </div>
-
-                <div className="space-y-3">
-                  <div className="rounded-2xl border border-zinc-800/70 bg-zinc-900/30 p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-[10px] uppercase tracking-[0.18em] text-zinc-500 font-bold">Strategy confidence</span>
-                      <span className="text-sm font-bold text-yellow-300">{selectedStock.confidence.toFixed(0)}%</span>
-                    </div>
-                    <div className="mt-3 h-2 rounded-full bg-zinc-800 overflow-hidden">
-                      <div className="h-full rounded-full bg-gradient-to-r from-yellow-500 via-yellow-300 to-amber-200" style={{ width: `${selectedStock.confidence}%` }} />
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl border border-zinc-800/70 bg-zinc-900/30 p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-[10px] uppercase tracking-[0.18em] text-zinc-500 font-bold">Modeled monthly win rate</span>
-                      <span className="text-sm font-bold text-white">{selectedStock.monthlyWinRate.toFixed(0)}%</span>
-                    </div>
-                    <div className="mt-4 grid grid-cols-3 gap-3 text-center">
-                      <div>
-                        <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Liquidity</p>
-                        <p className="mt-1 text-sm font-mono font-bold text-white">{selectedStock.liquidityScore.toFixed(1)}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Volatility</p>
-                        <p className="mt-1 text-sm font-mono font-bold text-white">{selectedStock.volatilityScore.toFixed(1)}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Trend</p>
-                        <p className="mt-1 text-sm font-mono font-bold text-white">{selectedStock.trendScore.toFixed(1)}</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </>
+          {selected ? (
+            tab === 'detail' ? (
+              <DetailPane selected={selected} positions={positions} fillProgressBars={fillProgressBars} />
             ) : (
-              <div className="rounded-2xl border border-dashed border-zinc-800 px-4 py-8 text-center text-sm text-zinc-500">
-                No stock is currently available for the selected filter set.
-              </div>
-            )}
+              <HistoryPane rows={historyRows} symbol={selected.grid.symbol} />
+            )
+          ) : (
+            <div className="p-10 text-center text-zinc-500 text-sm">No active grids.</div>
+          )}
+        </main>
+      </div>
+    </div>
+  );
+}
+
+function DetailPane({
+  selected,
+  positions,
+  fillProgressBars,
+}: {
+  selected: ReturnType<typeof Object> & {
+    grid: GridConfig;
+    price: number;
+    changePercent: number;
+    unrealizedPnL: number;
+    realizedPnL: number;
+    filledLevels: number;
+  };
+  positions: Position[];
+  fillProgressBars: { filled: boolean; active: boolean }[];
+}) {
+  const { grid } = selected;
+  const upper = grid.basePrice * (1 + grid.rangePercent / 100);
+  const lower = grid.basePrice * (1 - grid.rangePercent / 100);
+  const orderSize = grid.margin / Math.max(grid.totalLevels, 1);
+  const totalPnL = selected.realizedPnL + selected.unrealizedPnL;
+  const pnlPercent = grid.margin > 0 ? (totalPnL / grid.margin) * 100 : 0;
+  const positive = totalPnL >= 0;
+  const holding = positions.find((position) => position.symbol === grid.symbol);
+
+  return (
+    <div className="p-6 space-y-5 overflow-y-auto">
+      <div className="flex items-center gap-3">
+        <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center">
+          <Minus className="text-zinc-500" size={18} />
+        </div>
+        <div>
+          <h2 className="text-3xl font-bold text-white tracking-tight">{grid.symbol}</h2>
+          <div className="flex items-center gap-3 text-xs text-zinc-500 mt-0.5">
+            <span>{grid.symbol}/USDT</span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className={`w-1.5 h-1.5 rounded-full ${grid.active ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-600'}`} />
+              <span className={`text-[11px] uppercase tracking-wider font-bold ${grid.active ? 'text-emerald-400' : 'text-zinc-500'}`}>
+                {grid.active ? 'Active' : 'Paused'}
+              </span>
+            </span>
           </div>
         </div>
       </div>
+
+      <div className="rounded-2xl bg-zinc-900/40 border border-zinc-800/60 px-6 py-5">
+        <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500 font-bold mb-2">Unrealized PNL</p>
+        <div className="flex items-baseline gap-3">
+          <p className={`text-5xl font-mono ${positive ? 'text-emerald-400' : 'text-rose-400'}`}>
+            {formatSignedMoney(totalPnL, 4)}
+          </p>
+          <p className={`text-sm font-bold ${positive ? 'text-emerald-400/80' : 'text-rose-400/80'}`}>
+            {pnlPercent >= 0 ? '+' : ''}{pnlPercent.toFixed(2)}%
+          </p>
+        </div>
+        <div className="mt-4 flex items-center gap-6 text-xs">
+          <span className="text-zinc-500">Realized: <span className={selected.realizedPnL >= 0 ? 'text-emerald-400' : 'text-rose-400'}>{formatSignedMoney(selected.realizedPnL, 4)}</span></span>
+          <span className="text-zinc-500">Unrealized: <span className={selected.unrealizedPnL >= 0 ? 'text-emerald-400' : 'text-rose-400'}>{formatSignedMoney(selected.unrealizedPnL, 4)}</span></span>
+        </div>
+      </div>
+
+      <div className="rounded-2xl bg-zinc-900/40 border border-zinc-800/60 px-6 py-5">
+        <div className="flex items-center justify-between">
+          <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500 font-bold">Wallet Exposure</p>
+          <p className="text-emerald-400 font-mono text-sm">{grid.exposurePercent.toFixed(1)}%</p>
+        </div>
+        <div className="mt-3 h-1.5 rounded-full bg-zinc-800 overflow-hidden">
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-emerald-300 transition-[width] duration-700"
+            style={{ width: `${Math.min(grid.exposurePercent, 100)}%` }}
+          />
+        </div>
+        <div className="flex items-center justify-between mt-2 text-[10px] font-mono text-zinc-600">
+          <span>${grid.margin.toFixed(2)} margin</span>
+          <span>100%</span>
+        </div>
+      </div>
+
+      <div className="rounded-2xl bg-zinc-900/40 border border-zinc-800/60 overflow-hidden">
+        <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500 font-bold px-6 pt-5 pb-3">Grid Parameters</p>
+        <div className="divide-y divide-zinc-800/60">
+          <ParamRow label="Leverage" value={`${grid.leverage}x`} />
+          <ParamRow label="Order Size" value={formatMoney(orderSize)} />
+          <ParamRow label="Allocated Margin" value={formatMoney(grid.margin)} />
+          <ParamRow label="Wallet Exposure" value={`${grid.exposurePercent.toFixed(1)}%`} valueClassName="text-emerald-400" />
+          <ParamRow label="Grid Levels" value={grid.totalLevels.toString()} />
+          <ParamRow label="Fills" value={selected.filledLevels.toString()} />
+          <ParamRow label="Current Price" value={`$${formatPrice(selected.price)}`} valueClassName={selected.changePercent >= 0 ? 'text-emerald-400' : 'text-rose-400'} />
+          <ParamRow label="Upper Price" value={`$${formatPrice(upper)}`} />
+          <ParamRow label="Lower Price" value={`$${formatPrice(lower)}`} />
+          <ParamRow label="Duration" value={formatDuration(grid.durationMinutes)} />
+          {holding && <ParamRow label="Position" value={`${holding.quantity} sh`} />}
+        </div>
+      </div>
+
+      <div className="rounded-2xl bg-zinc-900/40 border border-zinc-800/60 px-6 py-5">
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500 font-bold">Grid Fill Progress</p>
+          <p className="text-xs font-mono text-zinc-400">{selected.filledLevels}/{grid.totalLevels} filled</p>
+        </div>
+        <div className="flex items-end gap-1 h-12">
+          {fillProgressBars.map((bar, index) => (
+            <div
+              key={index}
+              className={`flex-1 rounded-sm transition-colors duration-500 ${
+                bar.filled
+                  ? bar.active
+                    ? 'bg-yellow-300'
+                    : 'bg-amber-500/70'
+                  : 'bg-zinc-800/80'
+              }`}
+              style={{ height: `${30 + (index % 5) * 14}%` }}
+            />
+          ))}
+        </div>
+        <div className="flex items-center justify-between mt-3 text-[10px] font-mono text-zinc-600">
+          <span>${formatPrice(lower)}</span>
+          <span className="text-zinc-500">live ticks</span>
+          <span>${formatPrice(upper)}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function HistoryPane({
+  rows,
+  symbol,
+}: {
+  rows: { id: string; time: string; side: 'Buy' | 'Sell'; price: number; size: number; pnl: number }[];
+  symbol: string;
+}) {
+  return (
+    <div className="p-6 overflow-y-auto">
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500 font-bold">Recent Fills · {symbol}</p>
+        <p className="text-[10px] uppercase tracking-wider text-zinc-600 font-bold">Last 8</p>
+      </div>
+      <div className="rounded-2xl border border-zinc-800/60 overflow-hidden">
+        <div className="grid grid-cols-[80px_60px_1fr_1fr_1fr] px-4 py-2 bg-zinc-900/60 text-[10px] uppercase tracking-wider text-zinc-500 font-bold">
+          <span>Time</span>
+          <span>Side</span>
+          <span className="text-right">Price</span>
+          <span className="text-right">Size</span>
+          <span className="text-right">P/L</span>
+        </div>
+        <div className="divide-y divide-zinc-800/60">
+          {rows.map((row) => (
+            <div key={row.id} className="grid grid-cols-[80px_60px_1fr_1fr_1fr] px-4 py-3 text-xs font-mono items-center">
+              <span className="text-zinc-500">{row.time}</span>
+              <span className={`font-bold ${row.side === 'Buy' ? 'text-emerald-400' : 'text-rose-400'}`}>{row.side}</span>
+              <span className="text-right text-white">${formatPrice(row.price)}</span>
+              <span className="text-right text-zinc-300">{row.size.toFixed(2)}</span>
+              <span className={`text-right ${row.pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{formatSignedMoney(row.pnl, 4)}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ParamRow({ label, value, valueClassName }: { label: string; value: string; valueClassName?: string }) {
+  return (
+    <div className="flex items-center justify-between px-6 py-3">
+      <span className="text-sm text-zinc-400">{label}</span>
+      <span className={`text-sm font-mono ${valueClassName ?? 'text-white'}`}>{value}</span>
     </div>
   );
 }
