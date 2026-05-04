@@ -1,13 +1,15 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronRight, Minus } from 'lucide-react';
+import { ChevronRight, Minus, TrendingUp, TrendingDown, Bot, MousePointerClick, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { MOCK_SYMBOLS } from '../constants';
-import { Account, Position, SymbolInfo } from '../types';
+import { Account, ClosedTrade, ClosedTradesSummary, Position, SymbolInfo } from '../types';
 
 interface AssetsProps {
   basePath: '/app' | '/demo';
   positions: Position[];
   symbols: SymbolInfo[];
   account: Account | null;
+  closedTrades: ClosedTrade[];
+  closedTradesSummary: ClosedTradesSummary | null;
 }
 
 interface GridConfig {
@@ -175,7 +177,7 @@ function tickGrid(config: GridConfig, prevTick: GridTick | undefined, nowMs: num
   return { price, changePercent, unrealizedPnL, realizedPnL, filledLevels };
 }
 
-export default function Assets({ positions, symbols, account }: AssetsProps) {
+export default function Assets({ positions, symbols, account, closedTrades, closedTradesSummary }: AssetsProps) {
   const [tab, setTab] = useState<'detail' | 'history'>('detail');
   const liveSymbols = symbols.length > 0 ? symbols : MOCK_SYMBOLS;
 
@@ -544,6 +546,10 @@ export default function Assets({ positions, symbols, account }: AssetsProps) {
             <div className="p-10 text-center text-zinc-500 text-sm">No active grids.</div>
           )}
         </main>
+
+        <div className="border-t border-zinc-800/60 col-span-1 lg:col-span-2">
+          <ClosedTradesSection trades={closedTrades} summary={closedTradesSummary} />
+        </div>
       </div>
     </div>
   );
@@ -716,6 +722,192 @@ function ParamRow({ label, value, valueClassName }: { label: string; value: stri
     <div className="flex items-center justify-between px-6 py-3">
       <span className="text-sm text-zinc-400">{label}</span>
       <span className={`text-sm font-mono ${valueClassName ?? 'text-white'}`}>{value}</span>
+    </div>
+  );
+}
+
+function formatCurrency(value: number) {
+  return `$${Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function formatSigned(value: number) {
+  const abs = Math.abs(value);
+  const formatted = abs.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return value >= 0 ? `+$${formatted}` : `-$${formatted}`;
+}
+
+function formatDate(timestamp: string) {
+  const date = new Date(timestamp);
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function formatTime(timestamp: string) {
+  const date = new Date(timestamp);
+  return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+}
+
+function ClosedTradesSection({ trades, summary }: { trades: ClosedTrade[]; summary: ClosedTradesSummary | null }) {
+  const [filterType, setFilterType] = useState<'all' | 'auto' | 'manual'>('all');
+  const [sortBy, setSortBy] = useState<'date' | 'pnl' | 'pnl_percent'>('date');
+  const [showAll, setShowAll] = useState(false);
+
+  const stats = summary ?? {
+    totalTrades: 0,
+    totalRealizedPnl: 0,
+    avgPnlPercent: 0,
+    autoClosedCount: 0,
+    manualClosedCount: 0,
+  };
+
+  const filteredTrades = useMemo(() => {
+    let result = [...trades];
+
+    if (filterType === 'auto') {
+      result = result.filter((t) => t.autoClosed);
+    } else if (filterType === 'manual') {
+      result = result.filter((t) => !t.autoClosed);
+    }
+
+    if (sortBy === 'pnl') {
+      result.sort((a, b) => b.realizedPnl - a.realizedPnl);
+    } else if (sortBy === 'pnl_percent') {
+      result.sort((a, b) => b.pnlPercent - a.pnlPercent);
+    } else {
+      result.sort((a, b) => new Date(b.filledAt).getTime() - new Date(a.filledAt).getTime());
+    }
+
+    return result;
+  }, [trades, filterType, sortBy]);
+
+  const displayTrades = showAll ? filteredTrades : filteredTrades.slice(0, 5);
+
+  return (
+    <div className="p-6">
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h3 className="text-lg font-bold text-white">Closed Trades History</h3>
+          <p className="text-xs text-zinc-500">All auto-closed and manually exited positions.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="flex gap-1">
+            {(['all', 'auto', 'manual'] as const).map((option) => (
+              <button
+                key={option}
+                onClick={() => setFilterType(option)}
+                className={`px-2.5 py-1.5 rounded-lg text-[10px] font-bold border transition-all ${
+                  filterType === option
+                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                    : 'border-zinc-800 text-zinc-500 hover:border-zinc-700'
+                }`}
+              >
+                {option === 'all' ? 'All' : option === 'auto' ? 'Auto' : 'Manual'}
+              </button>
+            ))}
+          </div>
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as 'date' | 'pnl' | 'pnl_percent')}
+            className="bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1.5 text-[10px] text-zinc-400 focus:outline-none"
+          >
+            <option value="date">Date</option>
+            <option value="pnl">P&L $</option>
+            <option value="pnl_percent">P&L %</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+        <div className="rounded-xl border border-zinc-800/70 bg-zinc-900/30 px-3 py-2">
+          <p className="text-[9px] uppercase tracking-wider text-zinc-500 font-bold">Total Trades</p>
+          <p className="mt-1 text-lg font-mono font-bold text-white">{stats.totalTrades}</p>
+        </div>
+        <div className={`rounded-xl border bg-zinc-900/30 px-3 py-2 ${stats.totalRealizedPnl >= 0 ? 'border-emerald-500/20' : 'border-rose-500/20'}`}>
+          <p className="text-[9px] uppercase tracking-wider text-zinc-500 font-bold">Realized P&L</p>
+          <p className={`mt-1 text-lg font-mono font-bold ${stats.totalRealizedPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+            {formatSigned(stats.totalRealizedPnl)}
+          </p>
+        </div>
+        <div className="rounded-xl border border-zinc-800/70 bg-zinc-900/30 px-3 py-2">
+          <p className="text-[9px] uppercase tracking-wider text-zinc-500 font-bold">Avg Return</p>
+          <p className={`mt-1 text-lg font-mono font-bold ${stats.avgPnlPercent >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+            {stats.avgPnlPercent >= 0 ? '+' : ''}{stats.avgPnlPercent.toFixed(2)}%
+          </p>
+        </div>
+        <div className="rounded-xl border border-zinc-800/70 bg-zinc-900/30 px-3 py-2">
+          <p className="text-[9px] uppercase tracking-wider text-zinc-500 font-bold">Auto / Manual</p>
+          <p className="mt-1 text-lg font-mono font-bold text-white">{stats.autoClosedCount} / {stats.manualClosedCount}</p>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        {displayTrades.map((trade) => (
+          <div
+            key={trade.id}
+            className="rounded-xl border border-zinc-800/70 bg-zinc-900/30 p-3 hover:bg-zinc-900/50 transition-colors"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${trade.realizedPnl >= 0 ? 'bg-emerald-500/10' : 'bg-rose-500/10'}`}>
+                  {trade.realizedPnl >= 0 ? (
+                    <ArrowUpRight size={14} className="text-emerald-400" />
+                  ) : (
+                    <ArrowDownRight size={14} className="text-rose-400" />
+                  )}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-bold text-white">{trade.symbol}</span>
+                    <span className="text-[9px] uppercase tracking-wider text-zinc-500 font-bold">{trade.assetType}</span>
+                    {trade.autoClosed ? (
+                      <span className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-300 font-bold">
+                        <Bot size={9} />
+                        Auto
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 border border-blue-500/20 text-blue-300 font-bold">
+                        <MousePointerClick size={9} />
+                        Manual
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3 text-[10px] text-zinc-400 mt-1">
+                    <span>Entry: <span className="text-zinc-300 font-mono">${trade.entryPrice.toFixed(2)}</span></span>
+                    <span>Exit: <span className="text-zinc-300 font-mono">${trade.exitPrice.toFixed(2)}</span></span>
+                    <span>Qty: <span className="text-zinc-300 font-mono">{trade.quantity}</span></span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="text-right">
+                <p className={`text-sm font-mono font-bold ${trade.realizedPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  {formatSigned(trade.realizedPnl)}
+                </p>
+                <p className={`text-[10px] font-bold ${trade.pnlPercent >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  {trade.pnlPercent >= 0 ? '+' : ''}{trade.pnlPercent.toFixed(2)}%
+                </p>
+                <p className="text-[9px] text-zinc-500 mt-0.5">
+                  {formatDate(trade.filledAt)} {formatTime(trade.filledAt)}
+                </p>
+              </div>
+            </div>
+          </div>
+        ))}
+
+        {filteredTrades.length === 0 && (
+          <div className="p-8 border border-dashed border-zinc-800 rounded-xl text-center text-zinc-500 text-sm">
+            No closed trades yet.
+          </div>
+        )}
+
+        {filteredTrades.length > 5 && (
+          <button
+            onClick={() => setShowAll(!showAll)}
+            className="w-full py-2 text-xs font-bold text-zinc-400 hover:text-white transition-colors border border-zinc-800 rounded-xl hover:border-zinc-700"
+          >
+            {showAll ? `Show less (${filteredTrades.length} total)` : `Show all ${filteredTrades.length} trades`}
+          </button>
+        )}
+      </div>
     </div>
   );
 }

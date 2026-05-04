@@ -78,10 +78,9 @@ export default function Layout({ children, activeTab, basePath, user, account, i
   const menuItems = [
     { id: 'overview', label: 'Overview', icon: LayoutDashboard },
     { id: 'portfolio', label: 'Portfolio', icon: Briefcase },
-    { id: 'assets', label: 'Assets', icon: BarChart3 },
+    { id: 'ai-trader', label: 'AI Trader', icon: BarChart3 },
     { id: 'trade', label: 'Trade', icon: TrendingUp },
     { id: 'grid-orders', label: 'Grid Orders', icon: ClipboardList },
-    { id: 'closed', label: 'History', icon: History },
     { id: 'agents', label: 'Agents', icon: Bot },
     { id: 'logs', label: 'Agent Logs', icon: ScrollText },
     { id: 'wallet', label: 'Wallet', icon: Wallet },
