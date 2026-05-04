@@ -20,7 +20,7 @@ export default function Settings({ user }: any) {
             <div>
               <h4 className="text-lg font-bold">{user?.displayName || 'Trader'}</h4>
               <p className="text-sm text-zinc-500">{user?.email}</p>
-              <button className="mt-2 text-xs font-bold text-emerald-400 hover:underline">Change Avatar</button>
+              <button className="mt-2 text-xs font-bold text-yellow-400 hover:underline">Change Avatar</button>
             </div>
           </div>
 
@@ -30,7 +30,7 @@ export default function Settings({ user }: any) {
               <input 
                 type="text" 
                 defaultValue={user?.displayName || ''}
-                className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-2.5 px-4 text-sm focus:outline-none focus:border-emerald-500/50 transition-all"
+                className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-2.5 px-4 text-sm focus:outline-none focus:border-yellow-500/50 transition-all"
               />
             </div>
             <div className="space-y-2">
@@ -60,7 +60,7 @@ export default function Settings({ user }: any) {
                 <p className="text-sm font-medium">Auto-fill Orders</p>
                 <p className="text-[10px] text-zinc-500">Instantly fill paper orders at market price</p>
               </div>
-              <div className="w-10 h-5 bg-emerald-500 rounded-full relative cursor-pointer">
+              <div className="w-10 h-5 bg-yellow-500 rounded-full relative cursor-pointer">
                 <div className="absolute right-0.5 top-0.5 w-4 h-4 bg-white rounded-full shadow-sm"></div>
               </div>
             </div>
@@ -78,7 +78,7 @@ export default function Settings({ user }: any) {
 
         <div className="bg-[#0F0F11] border border-zinc-800/50 rounded-2xl p-6">
           <div className="flex items-center gap-3 mb-6">
-            <div className="p-2 bg-emerald-500/10 text-emerald-400 rounded-lg">
+            <div className="p-2 bg-yellow-500/10 text-yellow-400 rounded-lg">
               <Bot size={18} />
             </div>
             <h3 className="font-bold">Bot Defaults</h3>
@@ -86,7 +86,7 @@ export default function Settings({ user }: any) {
           <div className="space-y-4">
             <div className="space-y-2">
               <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold block">Default Max Allocation</label>
-              <select className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-2 px-3 text-xs focus:outline-none focus:border-emerald-500/50 transition-all appearance-none">
+              <select className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-2 px-3 text-xs focus:outline-none focus:border-yellow-500/50 transition-all appearance-none">
                 <option>5% of equity</option>
                 <option selected>10% of equity</option>
                 <option>20% of equity</option>
@@ -94,7 +94,7 @@ export default function Settings({ user }: any) {
             </div>
             <div className="space-y-2">
               <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold block">Approval Mode</label>
-              <select className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-2 px-3 text-xs focus:outline-none focus:border-emerald-500/50 transition-all appearance-none">
+              <select className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-2 px-3 text-xs focus:outline-none focus:border-yellow-500/50 transition-all appearance-none">
                 <option selected>Auto-execute</option>
                 <option>Manual Approval Required</option>
               </select>

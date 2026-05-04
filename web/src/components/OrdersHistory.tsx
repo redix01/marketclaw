@@ -13,7 +13,7 @@ export default function OrdersHistory({ orders }: OrdersHistory) {
       <div className="bg-[#0F0F11] border border-zinc-800/50 rounded-2xl overflow-hidden">
         <div className="p-6 border-b border-zinc-800/50 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div className="flex items-center gap-2">
-            <ClipboardList size={20} className="text-emerald-400" />
+            <ClipboardList size={20} className="text-yellow-400" />
             <h3 className="text-lg font-bold">Grid Orders</h3>
           </div>
           <div className="relative w-full md:w-64">
@@ -21,7 +21,7 @@ export default function OrdersHistory({ orders }: OrdersHistory) {
             <input 
               type="text" 
               placeholder="Search orders..." 
-              className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-2 pl-10 pr-4 text-xs focus:outline-none focus:border-emerald-500/50 transition-all"
+              className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-2 pl-10 pr-4 text-xs focus:outline-none focus:border-yellow-500/50 transition-all"
             />
           </div>
         </div>
@@ -51,7 +51,7 @@ export default function OrdersHistory({ orders }: OrdersHistory) {
                   </td>
                   <td className="px-6 py-4">
                     <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase border ${
-                      order.side === 'buy' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                      order.side === 'buy' ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
                     }`}>
                       {order.side}
                     </span>
@@ -60,7 +60,7 @@ export default function OrdersHistory({ orders }: OrdersHistory) {
                   <td className="px-6 py-4 text-sm font-mono">${order.fillPrice?.toFixed(2) || '---'}</td>
                   <td className="px-6 py-4">
                     <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${
-                      order.status === 'filled' ? 'bg-emerald-500/10 text-emerald-400' :
+                      order.status === 'filled' ? 'bg-yellow-500/10 text-yellow-400' :
                       order.status === 'pending' ? 'bg-amber-500/10 text-amber-400' :
                       'bg-rose-500/10 text-rose-400'
                     }`}>

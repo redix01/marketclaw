@@ -40,7 +40,7 @@ export default function Portfolio({ account, positions, symbols }: PortfolioProp
           <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold mb-1">Total Portfolio Value</p>
           <h3 className="text-3xl font-mono font-bold text-white">${totalEquity.toLocaleString(undefined, { minimumFractionDigits: 2 })}</h3>
           <div className="flex items-center gap-2 mt-2">
-            <span className={`text-xs font-bold flex items-center gap-1 ${dayPL >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+            <span className={`text-xs font-bold flex items-center gap-1 ${dayPL >= 0 ? 'text-yellow-400' : 'text-rose-400'}`}>
               {dayPL >= 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
               ${Math.abs(dayPL).toLocaleString(undefined, { minimumFractionDigits: 2 })} Today
             </span>
@@ -53,7 +53,7 @@ export default function Portfolio({ account, positions, symbols }: PortfolioProp
         </div>
         <div className="bg-[#0F0F11] border border-zinc-800/50 rounded-2xl p-6">
           <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold mb-1">Total P/L</p>
-          <h3 className={`text-3xl font-mono font-bold ${totalPL >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+          <h3 className={`text-3xl font-mono font-bold ${totalPL >= 0 ? 'text-yellow-400' : 'text-rose-400'}`}>
             {totalPL >= 0 ? '+' : ''}${totalPL.toLocaleString(undefined, { minimumFractionDigits: 2 })}
           </h3>
           <p className="text-xs text-zinc-500 mt-2">Since account creation</p>
@@ -62,7 +62,7 @@ export default function Portfolio({ account, positions, symbols }: PortfolioProp
 
       <div className="bg-[#0F0F11] border border-zinc-800/50 rounded-2xl overflow-hidden">
         <div className="p-6 border-b border-zinc-800/50 flex items-center gap-2">
-          <Briefcase size={20} className="text-emerald-400" />
+          <Briefcase size={20} className="text-yellow-400" />
           <h3 className="text-lg font-bold">Your Holdings</h3>
         </div>
         <div className="overflow-x-auto">
@@ -105,7 +105,7 @@ export default function Portfolio({ account, positions, symbols }: PortfolioProp
                     <td className="px-6 py-4 text-sm font-mono">${pos.averageEntryPrice.toFixed(2)}</td>
                     <td className="px-6 py-4 text-sm font-mono">${currentPrice.toFixed(2)}</td>
                     <td className="px-6 py-4 text-sm font-mono font-bold">${marketVal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                    <td className={`px-6 py-4 text-sm font-mono text-right ${pl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    <td className={`px-6 py-4 text-sm font-mono text-right ${pl >= 0 ? 'text-yellow-400' : 'text-rose-400'}`}>
                       {pl >= 0 ? '+' : ''}{pl.toFixed(2)}
                       <span className="block text-[10px] opacity-70">{plPercent.toFixed(2)}%</span>
                     </td>

@@ -79,15 +79,15 @@ export default function ClosedTrades({ trades, summary }: ClosedTradesProps) {
       label: 'Realized P&L',
       value: formatSigned(stats.totalRealizedPnl),
       icon: stats.totalRealizedPnl >= 0 ? TrendingUp : TrendingDown,
-      color: stats.totalRealizedPnl >= 0 ? 'text-emerald-400' : 'text-rose-400',
-      bg: stats.totalRealizedPnl >= 0 ? 'bg-emerald-500/10' : 'bg-rose-500/10',
+      color: stats.totalRealizedPnl >= 0 ? 'text-yellow-400' : 'text-rose-400',
+      bg: stats.totalRealizedPnl >= 0 ? 'bg-yellow-500/10' : 'bg-rose-500/10',
     },
     {
       label: 'Avg Return',
       value: `${stats.avgPnlPercent >= 0 ? '+' : ''}${stats.avgPnlPercent.toFixed(2)}%`,
       icon: stats.avgPnlPercent >= 0 ? ArrowUpRight : ArrowDownRight,
-      color: stats.avgPnlPercent >= 0 ? 'text-emerald-400' : 'text-rose-400',
-      bg: stats.avgPnlPercent >= 0 ? 'bg-emerald-500/10' : 'bg-rose-500/10',
+      color: stats.avgPnlPercent >= 0 ? 'text-yellow-400' : 'text-rose-400',
+      bg: stats.avgPnlPercent >= 0 ? 'bg-yellow-500/10' : 'bg-rose-500/10',
     },
     {
       label: 'Auto / Manual',
@@ -101,10 +101,10 @@ export default function ClosedTrades({ trades, summary }: ClosedTradesProps) {
   return (
     <div className="space-y-6">
       <div className="bg-[#0F0F11] border border-zinc-800/50 rounded-3xl p-6 md:p-8 overflow-hidden relative">
-        <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_top_right,rgba(16,185,129,0.15),transparent_35%),radial-gradient(circle_at_bottom_left,rgba(52,211,153,0.1),transparent_28%)]" />
+        <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_top_right,rgba(234,179,8,0.15),transparent_35%),radial-gradient(circle_at_bottom_left,rgba(250,204,21,0.1),transparent_28%)]" />
         <div className="relative">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-emerald-500/25 bg-emerald-500/10 text-emerald-300 text-[10px] font-bold uppercase tracking-[0.2em] mb-4">
-            <span className="w-2 h-2 rounded-full bg-emerald-300 animate-pulse" />
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-yellow-500/25 bg-yellow-500/10 text-yellow-300 text-[10px] font-bold uppercase tracking-[0.2em] mb-4">
+            <span className="w-2 h-2 rounded-full bg-yellow-300 animate-pulse" />
             Trade history
           </div>
           <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-white">Closed trades, realized gains.</h2>
@@ -146,7 +146,7 @@ export default function ClosedTrades({ trades, summary }: ClosedTradesProps) {
                 placeholder="Search symbol or type..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-2 pl-10 pr-4 text-xs focus:outline-none focus:border-emerald-500/50 transition-all"
+                className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-2 pl-10 pr-4 text-xs focus:outline-none focus:border-yellow-500/50 transition-all"
               />
             </div>
 
@@ -157,7 +157,7 @@ export default function ClosedTrades({ trades, summary }: ClosedTradesProps) {
                   onClick={() => setFilterType(option)}
                   className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all whitespace-nowrap ${
                     filterType === option
-                      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                      ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-300'
                       : 'border-zinc-800 text-zinc-500 hover:border-zinc-700'
                   }`}
                 >
@@ -178,11 +178,11 @@ export default function ClosedTrades({ trades, summary }: ClosedTradesProps) {
                 <div className="flex items-start gap-3">
                   <div
                     className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                      trade.realizedPnl >= 0 ? 'bg-emerald-500/10' : 'bg-rose-500/10'
+                      trade.realizedPnl >= 0 ? 'bg-yellow-500/10' : 'bg-rose-500/10'
                     }`}
                   >
                     {trade.realizedPnl >= 0 ? (
-                      <ArrowUpRight size={18} className="text-emerald-400" />
+                      <ArrowUpRight size={18} className="text-yellow-400" />
                     ) : (
                       <ArrowDownRight size={18} className="text-rose-400" />
                     )}
@@ -220,10 +220,10 @@ export default function ClosedTrades({ trades, summary }: ClosedTradesProps) {
                 </div>
 
                 <div className="text-right">
-                  <p className={`text-lg font-mono font-bold ${trade.realizedPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  <p className={`text-lg font-mono font-bold ${trade.realizedPnl >= 0 ? 'text-yellow-400' : 'text-rose-400'}`}>
                     {formatSigned(trade.realizedPnl)}
                   </p>
-                  <p className={`text-xs font-bold mt-1 ${trade.pnlPercent >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  <p className={`text-xs font-bold mt-1 ${trade.pnlPercent >= 0 ? 'text-yellow-400' : 'text-rose-400'}`}>
                     {trade.pnlPercent >= 0 ? '+' : ''}{trade.pnlPercent.toFixed(2)}%
                   </p>
                   <p className="text-[10px] text-zinc-500 mt-2">

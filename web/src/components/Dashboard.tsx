@@ -36,11 +36,11 @@ interface DashboardProps {
 const StatCard = ({ title, value, subValue, icon: Icon, trend }: any) => (
   <div className="bg-[#0F0F11] border border-zinc-800/50 rounded-2xl p-5 hover:border-zinc-700/50 transition-all group">
     <div className="flex justify-between items-start mb-4">
-      <div className="p-2.5 bg-zinc-900 rounded-xl group-hover:bg-emerald-500/10 group-hover:text-emerald-400 transition-colors">
+      <div className="p-2.5 bg-zinc-900 rounded-xl group-hover:bg-yellow-500/10 group-hover:text-yellow-400 transition-colors">
         <Icon size={20} />
       </div>
       {trend && (
-        <div className={`flex items-center gap-1 text-xs font-bold ${trend > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+        <div className={`flex items-center gap-1 text-xs font-bold ${trend > 0 ? 'text-yellow-400' : 'text-rose-400'}`}>
           {trend > 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
           {Math.abs(trend)}%
         </div>
@@ -89,7 +89,7 @@ export default function Dashboard({ account, positions, orders, ledger, agents, 
       .reduce((acc, pos) => acc + (pos.marketValue ?? pos.quantity * (pos.currentPrice ?? pos.averageEntryPrice)), 0);
 
     return [
-      { name: 'Cash', value: account?.cashBalance || 0, color: '#10b981' },
+      { name: 'Cash', value: account?.cashBalance || 0, color: '#eab308' },
       { name: 'Stock', value: stockValue, color: '#3b82f6' },
       { name: 'Crypto', value: cryptoValue, color: '#f59e0b' },
     ].filter((item) => item.value > 0);
@@ -135,7 +135,7 @@ export default function Dashboard({ account, positions, orders, ledger, agents, 
                 <button
                   key={t}
                   onClick={() => setRange(t)}
-                  className={`px-3 py-1 text-xs font-bold rounded-lg border transition-all ${t === range ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'border-zinc-800 text-zinc-500 hover:border-zinc-700'}`}
+                  className={`px-3 py-1 text-xs font-bold rounded-lg border transition-all ${t === range ? 'bg-yellow-500/10 border-yellow-500/20 text-yellow-400' : 'border-zinc-800 text-zinc-500 hover:border-zinc-700'}`}
                 >
                   {t}
                 </button>
@@ -147,8 +147,8 @@ export default function Dashboard({ account, positions, orders, ledger, agents, 
               <AreaChart data={chartData}>
                 <defs>
                   <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                    <stop offset="5%" stopColor="#eab308" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#eab308" stopOpacity={0}/>
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" vertical={false} />
@@ -156,9 +156,9 @@ export default function Dashboard({ account, positions, orders, ledger, agents, 
                 <YAxis stroke="#6b7280" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
                 <Tooltip 
                   contentStyle={{ backgroundColor: '#0F0F11', border: '1px solid #374151', borderRadius: '12px' }}
-                  itemStyle={{ color: '#10b981' }}
+                  itemStyle={{ color: '#eab308' }}
                 />
-                <Area type="monotone" dataKey="value" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorValue)" />
+                <Area type="monotone" dataKey="value" stroke="#eab308" strokeWidth={2} fillOpacity={1} fill="url(#colorValue)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -206,7 +206,7 @@ export default function Dashboard({ account, positions, orders, ledger, agents, 
         <div className="bg-[#0F0F11] border border-zinc-800/50 rounded-2xl overflow-hidden">
           <div className="p-6 border-b border-zinc-800/50 flex justify-between items-center">
             <h3 className="text-lg font-bold">Open Positions</h3>
-            <button className="text-xs font-bold text-emerald-400 hover:text-emerald-300">View All</button>
+            <button className="text-xs font-bold text-yellow-400 hover:text-yellow-300">View All</button>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left">
@@ -241,7 +241,7 @@ export default function Dashboard({ account, positions, orders, ledger, agents, 
                       <td className="px-6 py-4 text-sm font-mono">{pos.quantity}</td>
                       <td className="px-6 py-4 text-sm font-mono">${pos.averageEntryPrice.toFixed(2)}</td>
                       <td className="px-6 py-4 text-sm font-mono">${currentPrice.toFixed(2)}</td>
-                      <td className={`px-6 py-4 text-sm font-mono text-right ${pl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      <td className={`px-6 py-4 text-sm font-mono text-right ${pl >= 0 ? 'text-yellow-400' : 'text-rose-400'}`}>
                         {pl >= 0 ? '+' : ''}{pl.toFixed(2)}
                         <span className="block text-[10px] opacity-70">{plPercent.toFixed(2)}%</span>
                       </td>
@@ -263,14 +263,14 @@ export default function Dashboard({ account, positions, orders, ledger, agents, 
         <div className="bg-[#0F0F11] border border-zinc-800/50 rounded-2xl overflow-hidden">
           <div className="p-6 border-b border-zinc-800/50 flex justify-between items-center">
             <h3 className="text-lg font-bold">Recent Activity</h3>
-            <button className="text-xs font-bold text-emerald-400 hover:text-emerald-300">View History</button>
+            <button className="text-xs font-bold text-yellow-400 hover:text-yellow-300">View History</button>
           </div>
           <div className="divide-y divide-zinc-800/50">
             {ledger.slice(0, 6).map((event) => (
               <div key={event.id} className="px-6 py-4 flex items-center justify-between hover:bg-zinc-800/30 transition-colors">
                 <div className="flex items-center gap-4">
                   <div className={`p-2 rounded-lg ${
-                    event.type === 'deposit' ? 'bg-emerald-500/10 text-emerald-400' :
+                    event.type === 'deposit' ? 'bg-yellow-500/10 text-yellow-400' :
                     event.type === 'withdrawal' ? 'bg-rose-500/10 text-rose-400' :
                     'bg-blue-500/10 text-blue-400'
                   }`}>
@@ -283,7 +283,7 @@ export default function Dashboard({ account, positions, orders, ledger, agents, 
                     <p className="text-[10px] text-zinc-500">{new Date(event.timestamp).toLocaleString()}</p>
                   </div>
                 </div>
-                <p className={`text-sm font-mono font-bold ${event.amount >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                <p className={`text-sm font-mono font-bold ${event.amount >= 0 ? 'text-yellow-400' : 'text-rose-400'}`}>
                   {event.amount >= 0 ? '+' : ''}{event.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </p>
               </div>

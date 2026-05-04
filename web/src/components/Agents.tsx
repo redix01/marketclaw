@@ -61,7 +61,7 @@ export default function Agents({ user, agents, positions }: AgentsProps) {
           <h3 className="text-lg font-bold">Your Agents</h3>
           <button 
             onClick={() => setIsCreateModalOpen(true)}
-            className="p-2 bg-emerald-500 text-black rounded-lg hover:bg-emerald-400 transition-colors"
+            className="p-2 bg-yellow-500 text-black rounded-lg hover:bg-yellow-400 transition-colors"
           >
             <Plus size={20} />
           </button>
@@ -73,13 +73,13 @@ export default function Agents({ user, agents, positions }: AgentsProps) {
             onClick={() => setSelectedAgent(agent)}
             className={`w-full p-4 rounded-2xl border text-left transition-all ${
               selectedAgent?.id === agent.id 
-                ? 'bg-emerald-500/5 border-emerald-500/30 ring-1 ring-emerald-500/30' 
+                ? 'bg-yellow-500/5 border-yellow-500/30 ring-1 ring-yellow-500/30' 
                 : 'bg-[#0F0F11] border-zinc-800 hover:border-zinc-700'
             }`}
           >
             <div className="flex justify-between items-start mb-3">
               <div className="flex items-center gap-3">
-                <div className={`p-2 rounded-lg ${agent.status === 'running' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-zinc-800 text-zinc-500'}`}>
+                <div className={`p-2 rounded-lg ${agent.status === 'running' ? 'bg-yellow-500/10 text-yellow-400' : 'bg-zinc-800 text-zinc-500'}`}>
                   <Bot size={20} />
                 </div>
                 <div>
@@ -87,7 +87,7 @@ export default function Agents({ user, agents, positions }: AgentsProps) {
                   <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider">{agent.template.replace('_', ' ')}</p>
                 </div>
               </div>
-              <div className={`w-2 h-2 rounded-full ${agent.status === 'running' ? 'bg-emerald-500 animate-pulse' : 'bg-zinc-600'}`}></div>
+              <div className={`w-2 h-2 rounded-full ${agent.status === 'running' ? 'bg-yellow-500 animate-pulse' : 'bg-zinc-600'}`}></div>
             </div>
             
             <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-zinc-800/50">
@@ -109,7 +109,7 @@ export default function Agents({ user, agents, positions }: AgentsProps) {
             <p className="text-sm text-zinc-500">No agents created yet.</p>
             <button 
               onClick={() => setIsCreateModalOpen(true)}
-              className="mt-4 text-emerald-400 text-xs font-bold hover:underline"
+              className="mt-4 text-yellow-400 text-xs font-bold hover:underline"
             >
               Create your first agent
             </button>
@@ -124,14 +124,14 @@ export default function Agents({ user, agents, positions }: AgentsProps) {
             <div className="p-6 border-b border-zinc-800/50 flex justify-between items-center bg-zinc-900/30">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 bg-zinc-800 rounded-xl flex items-center justify-center">
-                  <Bot size={24} className="text-emerald-400" />
+                  <Bot size={24} className="text-yellow-400" />
                 </div>
                 <div>
                   <h2 className="text-xl font-bold">{selectedAgent.name}</h2>
                   <div className="flex items-center gap-2">
                     <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase border ${
                       selectedAgent.status === 'running' 
-                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+                        ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' 
                         : 'bg-zinc-800 text-zinc-500 border-zinc-700'
                     }`}>
                       {selectedAgent.status}
@@ -147,7 +147,7 @@ export default function Agents({ user, agents, positions }: AgentsProps) {
                   className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm transition-all ${
                     selectedAgent.status === 'running'
                       ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20'
-                      : 'bg-emerald-500 text-black hover:bg-emerald-400'
+                      : 'bg-yellow-500 text-black hover:bg-yellow-400'
                   }`}
                 >
                   {selectedAgent.status === 'running' ? <><Square size={16} /> Stop</> : <><Play size={16} /> Start</>}
@@ -180,13 +180,13 @@ export default function Agents({ user, agents, positions }: AgentsProps) {
                       <Shield size={14} />
                       <span className="text-[10px] font-bold uppercase tracking-wider">Risk Gate</span>
                     </div>
-                    <p className="text-sm font-bold text-emerald-400">Active</p>
+                    <p className="text-sm font-bold text-yellow-400">Active</p>
                   </div>
                 </div>
 
                 <div className="bg-zinc-900/30 rounded-2xl p-6 border border-zinc-800/50">
                   <h3 className="text-sm font-bold mb-4 flex items-center gap-2">
-                    <Activity size={16} className="text-emerald-400" />
+                    <Activity size={16} className="text-yellow-400" />
                     Performance Overview
                   </h3>
                   <div className="h-48 flex items-center justify-center text-zinc-600 italic text-xs">
@@ -312,7 +312,7 @@ function CreateAgentModal({ user, onClose }: any) {
                   placeholder="e.g. Trend Rider Alpha"
                   value={formData.name}
                   onChange={(e) => setFormData({...formData, name: e.target.value})}
-                  className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-emerald-500/50 transition-all"
+                  className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-yellow-500/50 transition-all"
                 />
               </div>
               <div>
@@ -324,7 +324,7 @@ function CreateAgentModal({ user, onClose }: any) {
                       onClick={() => setFormData({...formData, template: t.id})}
                       className={`p-4 rounded-xl border text-left transition-all ${
                         formData.template === t.id 
-                          ? 'bg-emerald-500/5 border-emerald-500/30 ring-1 ring-emerald-500/30' 
+                          ? 'bg-yellow-500/5 border-yellow-500/30 ring-1 ring-yellow-500/30' 
                           : 'bg-zinc-900/30 border-zinc-800 hover:border-zinc-700'
                       }`}
                     >
@@ -353,7 +353,7 @@ function CreateAgentModal({ user, onClose }: any) {
                       }}
                       className={`px-4 py-2 rounded-xl border text-xs font-bold transition-all ${
                         formData.symbols.includes(s.symbol)
-                          ? 'bg-emerald-500 text-black border-emerald-500'
+                          ? 'bg-yellow-500 text-black border-yellow-500'
                           : 'bg-zinc-900/30 border-zinc-800 text-zinc-400 hover:border-zinc-700'
                       }`}
                     >
@@ -367,7 +367,7 @@ function CreateAgentModal({ user, onClose }: any) {
                 <select 
                   value={formData.tickFrequency}
                   onChange={(e) => setFormData({...formData, tickFrequency: e.target.value})}
-                  className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-emerald-500/50 transition-all appearance-none"
+                  className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-yellow-500/50 transition-all appearance-none"
                 >
                   <option value="5m">Every 5 minutes</option>
                   <option value="15m">Every 15 minutes</option>
@@ -388,7 +388,7 @@ function CreateAgentModal({ user, onClose }: any) {
                     type="number" 
                     value={formData.maxAllocation}
                     onChange={(e) => setFormData({...formData, maxAllocation: parseInt(e.target.value)})}
-                    className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-emerald-500/50 transition-all"
+                    className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-yellow-500/50 transition-all"
                   />
                 </div>
                 <div>
@@ -397,12 +397,12 @@ function CreateAgentModal({ user, onClose }: any) {
                     type="number" 
                     value={formData.maxPositionSize}
                     onChange={(e) => setFormData({...formData, maxPositionSize: parseInt(e.target.value)})}
-                    className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-emerald-500/50 transition-all"
+                    className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-yellow-500/50 transition-all"
                   />
                 </div>
               </div>
-              <div className="p-4 bg-emerald-500/5 border border-emerald-500/20 rounded-2xl">
-                <div className="flex items-center gap-2 text-emerald-400 mb-2">
+              <div className="p-4 bg-yellow-500/5 border border-yellow-500/20 rounded-2xl">
+                <div className="flex items-center gap-2 text-yellow-400 mb-2">
                   <Shield size={16} />
                   <span className="text-xs font-bold">Risk Management Active</span>
                 </div>
@@ -424,7 +424,7 @@ function CreateAgentModal({ user, onClose }: any) {
           </button>
           <button 
             onClick={() => step === 3 ? handleCreate() : setStep(step + 1)}
-            className="px-8 py-3 bg-emerald-500 text-black rounded-xl font-bold hover:bg-emerald-400 transition-all shadow-lg shadow-emerald-500/20"
+            className="px-8 py-3 bg-yellow-500 text-black rounded-xl font-bold hover:bg-yellow-400 transition-all shadow-lg shadow-yellow-500/20"
           >
             {step === 3 ? 'Create Agent' : 'Next Step'}
           </button>

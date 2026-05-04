@@ -34,10 +34,10 @@ const FeatureCard = ({ icon: Icon, title, description, delay = 0 }: any) => (
     whileInView={{ opacity: 1, y: 0 }}
     transition={{ duration: 0.5, delay }}
     viewport={{ once: true }}
-    className="p-6 md:p-8 bg-zinc-900/40 border border-white/5 rounded-[24px] md:rounded-[32px] hover:border-emerald-500/20 transition-all group relative overflow-hidden"
+    className="p-6 md:p-8 bg-zinc-900/40 border border-white/5 rounded-[24px] md:rounded-[32px] hover:border-yellow-500/20 transition-all group relative overflow-hidden"
   >
-    <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 blur-3xl -z-10 group-hover:bg-emerald-500/10 transition-colors"></div>
-    <div className="w-12 h-12 md:w-14 md:h-14 bg-white/5 text-emerald-400 rounded-xl md:rounded-2xl flex items-center justify-center mb-6 md:mb-8 group-hover:scale-110 transition-transform border border-white/5">
+    <div className="absolute top-0 right-0 w-32 h-32 bg-yellow-500/5 blur-3xl -z-10 group-hover:bg-yellow-500/10 transition-colors"></div>
+    <div className="w-12 h-12 md:w-14 md:h-14 bg-white/5 text-yellow-400 rounded-xl md:rounded-2xl flex items-center justify-center mb-6 md:mb-8 group-hover:scale-110 transition-transform border border-white/5">
       <Icon size={24} md:size={28} />
     </div>
     <h3 className="text-xl md:text-2xl font-display font-semibold text-white mb-3 md:mb-4 uppercase tracking-tight">{title}</h3>
@@ -62,7 +62,7 @@ const MarketTicker = () => {
           <div key={i} className="flex items-center gap-2 md:gap-3">
             <span className="text-zinc-500 font-mono text-[10px] md:text-xs uppercase tracking-widest">{m.name}</span>
             <span className="text-white font-mono font-medium text-xs md:text-sm">{m.price}</span>
-            <span className={m.up ? 'text-emerald-400 font-mono text-[10px] md:text-xs' : 'text-rose-400 font-mono text-[10px] md:text-xs'}>
+            <span className={m.up ? 'text-yellow-400 font-mono text-[10px] md:text-xs' : 'text-rose-400 font-mono text-[10px] md:text-xs'}>
               {m.change}
             </span>
           </div>
@@ -76,12 +76,12 @@ export default function LandingPage({ user, onLaunchApp, onViewDemo }: LandingPa
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
 
   return (
-    <div className="min-h-screen bg-[#050505] text-zinc-100 font-sans selection:bg-emerald-500/30 overflow-x-hidden">
+    <div className="min-h-screen bg-[#050505] text-zinc-100 font-sans selection:bg-yellow-500/30 overflow-x-hidden">
       {/* Navigation */}
       <nav className="fixed top-0 left-0 right-0 z-50 border-b border-white/5 bg-[#050505]/80 backdrop-blur-2xl">
         <div className="max-w-[1400px] mx-auto px-4 sm:px-8 h-20 md:h-24 flex items-center justify-between">
           <div className="flex items-center gap-3 md:gap-4">
-            <div className="w-10 h-10 md:w-12 md:h-12 bg-emerald-500 rounded-xl md:rounded-2xl flex items-center justify-center shadow-2xl shadow-emerald-500/40">
+            <div className="w-10 h-10 md:w-12 md:h-12 bg-yellow-500 rounded-xl md:rounded-2xl flex items-center justify-center shadow-2xl shadow-yellow-500/40">
               <Bot className="text-black" size={24} />
             </div>
             <span className="text-xl md:text-2xl font-display font-bold tracking-tight text-white">
@@ -90,9 +90,9 @@ export default function LandingPage({ user, onLaunchApp, onViewDemo }: LandingPa
           </div>
           
           <div className="hidden lg:flex items-center gap-12 text-sm font-medium text-zinc-400 uppercase tracking-widest">
-            <a href="#features" className="hover:text-emerald-400 transition-colors">Intelligence</a>
-            <a href="#markets" className="hover:text-emerald-400 transition-colors">Markets</a>
-            <a href="#demo" className="hover:text-emerald-400 transition-colors">Interface</a>
+            <a href="#features" className="hover:text-yellow-400 transition-colors">Intelligence</a>
+            <a href="#markets" className="hover:text-yellow-400 transition-colors">Markets</a>
+            <a href="#demo" className="hover:text-yellow-400 transition-colors">Interface</a>
           </div>
 
           <div className="flex items-center gap-3 md:gap-6">
@@ -129,9 +129,9 @@ export default function LandingPage({ user, onLaunchApp, onViewDemo }: LandingPa
               className="lg:hidden bg-[#050505] border-b border-white/5 overflow-hidden"
             >
               <div className="px-8 py-8 flex flex-col gap-6 text-sm font-bold uppercase tracking-[0.2em] text-zinc-400">
-                <a href="#features" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-emerald-400 transition-colors">Intelligence</a>
-                <a href="#markets" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-emerald-400 transition-colors">Markets</a>
-                <a href="#demo" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-emerald-400 transition-colors">Interface</a>
+                <a href="#features" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-yellow-400 transition-colors">Intelligence</a>
+                <a href="#markets" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-yellow-400 transition-colors">Markets</a>
+                <a href="#demo" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-yellow-400 transition-colors">Interface</a>
                 <div className="pt-6 border-t border-white/5 flex flex-col gap-4">
                   {!user && (
                     <button 
@@ -149,7 +149,7 @@ export default function LandingPage({ user, onLaunchApp, onViewDemo }: LandingPa
                       onLaunchApp();
                       setIsMobileMenuOpen(false);
                     }}
-                    className="text-left text-emerald-400 hover:text-emerald-300 transition-colors"
+                    className="text-left text-yellow-400 hover:text-yellow-300 transition-colors"
                   >
                     {user ? 'Go to Dashboard' : 'Launch Terminal'}
                   </button>
@@ -163,7 +163,7 @@ export default function LandingPage({ user, onLaunchApp, onViewDemo }: LandingPa
       {/* Hero Section */}
       <section className="relative pt-32 md:pt-48 pb-20 md:pb-32 px-4 md:px-8 overflow-hidden">
         {/* Background Accents */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-[600px] md:h-[800px] bg-emerald-500/5 blur-[120px] md:blur-[160px] rounded-full -z-10"></div>
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-[600px] md:h-[800px] bg-yellow-500/5 blur-[120px] md:blur-[160px] rounded-full -z-10"></div>
         
         <div className="max-w-[1400px] mx-auto">
           <div className="grid lg:grid-cols-2 gap-12 md:gap-20 items-center">
@@ -174,15 +174,15 @@ export default function LandingPage({ user, onLaunchApp, onViewDemo }: LandingPa
               className="text-center lg:text-left"
             >
               <div className="flex items-center justify-center lg:justify-start gap-3 mb-6 md:mb-8">
-                <span className="w-8 md:w-12 h-[1px] bg-emerald-500"></span>
-                <span className="text-emerald-400 text-[10px] md:text-xs font-bold uppercase tracking-[0.3em]">
+                <span className="w-8 md:w-12 h-[1px] bg-yellow-500"></span>
+                <span className="text-yellow-400 text-[10px] md:text-xs font-bold uppercase tracking-[0.3em]">
                   Autonomous Financial Intelligence
                 </span>
               </div>
               
               <h1 className="text-5xl sm:text-7xl md:text-8xl lg:text-[110px] font-display font-bold tracking-tighter text-white mb-8 md:mb-10 leading-[0.9] uppercase">
                 Trade <br />
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-white via-emerald-400 to-zinc-500">
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-white via-yellow-400 to-zinc-500">
                   Beyond
                 </span> <br />
                 Limits
@@ -195,7 +195,7 @@ export default function LandingPage({ user, onLaunchApp, onViewDemo }: LandingPa
               <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4 md:gap-6">
                 <button 
                   onClick={onLaunchApp}
-                  className="w-full sm:w-auto px-8 py-4 bg-emerald-500 text-black rounded-full font-bold text-base hover:scale-105 transition-all shadow-2xl shadow-emerald-500/40 flex items-center justify-center gap-3 uppercase tracking-wider"
+                  className="w-full sm:w-auto px-8 py-4 bg-yellow-500 text-black rounded-full font-bold text-base hover:scale-105 transition-all shadow-2xl shadow-yellow-500/40 flex items-center justify-center gap-3 uppercase tracking-wider"
                 >
                   {user ? 'Enter Dashboard' : 'Start Trading'} <ArrowRight size={18} />
                 </button>
@@ -217,7 +217,7 @@ export default function LandingPage({ user, onLaunchApp, onViewDemo }: LandingPa
               className="relative hidden sm:block"
             >
               <div className="relative aspect-[4/5] rounded-[32px] md:rounded-[40px] border border-white/10 bg-zinc-900/50 p-3 md:p-4 shadow-2xl overflow-hidden group">
-                <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 via-transparent to-transparent opacity-50"></div>
+                <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/10 via-transparent to-transparent opacity-50"></div>
                 <div className="h-full w-full rounded-[24px] md:rounded-[32px] overflow-hidden border border-white/5 relative">
                   <img 
                     src="https://picsum.photos/seed/premium-trading/1000/1200" 
@@ -226,7 +226,7 @@ export default function LandingPage({ user, onLaunchApp, onViewDemo }: LandingPa
                     referrerPolicy="no-referrer"
                   />
                   <div className="absolute inset-0 flex flex-col items-center justify-center p-6 md:p-12 text-center bg-black/40 backdrop-blur-sm">
-                    <div className="w-16 h-16 md:w-24 md:h-24 bg-emerald-500 rounded-2xl md:rounded-3xl flex items-center justify-center mb-6 md:mb-8 shadow-2xl shadow-emerald-500/50">
+                    <div className="w-16 h-16 md:w-24 md:h-24 bg-yellow-500 rounded-2xl md:rounded-3xl flex items-center justify-center mb-6 md:mb-8 shadow-2xl shadow-yellow-500/50">
                       <Activity size={32} className="text-black md:hidden" />
                       <Activity size={48} className="text-black hidden md:block" />
                     </div>
@@ -245,7 +245,7 @@ export default function LandingPage({ user, onLaunchApp, onViewDemo }: LandingPa
                 className="absolute -top-6 -right-6 md:-top-10 md:-right-10 p-4 md:p-6 bg-zinc-900/90 border border-white/10 rounded-xl md:rounded-2xl backdrop-blur-xl shadow-2xl hidden md:block"
               >
                 <div className="flex items-center gap-3 md:gap-4">
-                  <div className="w-8 h-8 md:w-10 md:h-10 bg-emerald-500/20 rounded-lg flex items-center justify-center text-emerald-400">
+                  <div className="w-8 h-8 md:w-10 md:h-10 bg-yellow-500/20 rounded-lg flex items-center justify-center text-yellow-400">
                     <TrendingUp size={16} md:size={20} />
                   </div>
                   <div>
@@ -281,11 +281,11 @@ export default function LandingPage({ user, onLaunchApp, onViewDemo }: LandingPa
       <section id="process" className="py-32 px-8 border-b border-white/5">
         <div className="max-w-[1400px] mx-auto">
           <div className="text-center mb-24">
-            <span className="text-emerald-400 text-[10px] font-bold uppercase tracking-[0.4em] mb-6 block">
+            <span className="text-yellow-400 text-[10px] font-bold uppercase tracking-[0.4em] mb-6 block">
               Workflow
             </span>
             <h2 className="text-4xl md:text-6xl font-display font-bold text-white uppercase tracking-tighter">
-              From Prompt to <span className="text-emerald-500">Profit</span>
+              From Prompt to <span className="text-yellow-500">Profit</span>
             </h2>
           </div>
 
@@ -308,7 +308,7 @@ export default function LandingPage({ user, onLaunchApp, onViewDemo }: LandingPa
               }
             ].map((item, i) => (
               <div key={i} className="relative group">
-                <div className="text-8xl font-display font-black text-white/5 absolute -top-12 -left-4 group-hover:text-emerald-500/10 transition-colors">
+                <div className="text-8xl font-display font-black text-white/5 absolute -top-12 -left-4 group-hover:text-yellow-500/10 transition-colors">
                   {item.step}
                 </div>
                 <div className="relative pt-8">
@@ -371,11 +371,11 @@ export default function LandingPage({ user, onLaunchApp, onViewDemo }: LandingPa
 
       {/* Interface Section */}
       <section id="demo" className="py-32 px-8 relative overflow-hidden">
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-5xl h-[500px] bg-emerald-500/5 blur-[120px] rounded-full -z-10"></div>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-5xl h-[500px] bg-yellow-500/5 blur-[120px] rounded-full -z-10"></div>
         
         <div className="max-w-[1400px] mx-auto text-center">
           <div className="mb-20">
-            <span className="text-emerald-400 text-xs font-bold uppercase tracking-[0.3em] mb-6 block">
+            <span className="text-yellow-400 text-xs font-bold uppercase tracking-[0.3em] mb-6 block">
               The Command Center
             </span>
             <h2 className="text-5xl md:text-7xl font-display font-bold text-white mb-8 uppercase tracking-tighter">
@@ -384,7 +384,7 @@ export default function LandingPage({ user, onLaunchApp, onViewDemo }: LandingPa
           </div>
 
           <div className="relative mx-auto max-w-6xl rounded-[40px] border border-white/10 bg-zinc-900/30 p-4 shadow-2xl backdrop-blur-sm overflow-hidden group">
-            <div className="absolute inset-0 bg-gradient-to-b from-emerald-500/5 to-transparent"></div>
+            <div className="absolute inset-0 bg-gradient-to-b from-yellow-500/5 to-transparent"></div>
             <div className="aspect-video rounded-[32px] overflow-hidden border border-white/5 relative">
               <img 
                 src="https://picsum.photos/seed/dashboard-premium/1600/900" 
@@ -397,7 +397,7 @@ export default function LandingPage({ user, onLaunchApp, onViewDemo }: LandingPa
                   onClick={onViewDemo}
                   className="group/btn relative p-1"
                 >
-                  <div className="absolute inset-0 bg-emerald-500 blur-2xl opacity-20 group-hover/btn:opacity-40 transition-opacity"></div>
+                  <div className="absolute inset-0 bg-yellow-500 blur-2xl opacity-20 group-hover/btn:opacity-40 transition-opacity"></div>
                   <div className="relative w-24 h-24 bg-white rounded-full flex items-center justify-center text-black hover:scale-110 transition-transform">
                     <Zap size={32} fill="currentColor" />
                   </div>
@@ -414,7 +414,7 @@ export default function LandingPage({ user, onLaunchApp, onViewDemo }: LandingPa
           <div className="grid lg:grid-cols-2 gap-20 items-center">
             <div>
               <h2 className="text-4xl md:text-6xl font-display font-bold text-white uppercase tracking-tighter mb-10">
-                Institutional <br /> <span className="text-emerald-500">Fidelity</span>
+                Institutional <br /> <span className="text-yellow-500">Fidelity</span>
               </h2>
               <div className="space-y-8">
                 {[
@@ -423,7 +423,7 @@ export default function LandingPage({ user, onLaunchApp, onViewDemo }: LandingPa
                   { title: 'Secure Sandboxing', desc: 'Every agent runs in an isolated, secure environment with strict resource allocation.' }
                 ].map((item, i) => (
                   <div key={i} className="flex gap-6">
-                    <div className="w-12 h-12 bg-zinc-900 border border-white/5 rounded-xl flex items-center justify-center text-emerald-400 shrink-0">
+                    <div className="w-12 h-12 bg-zinc-900 border border-white/5 rounded-xl flex items-center justify-center text-yellow-400 shrink-0">
                       <Shield size={24} />
                     </div>
                     <div>
@@ -436,14 +436,14 @@ export default function LandingPage({ user, onLaunchApp, onViewDemo }: LandingPa
             </div>
             <div className="relative">
               <div className="aspect-square rounded-[40px] border border-white/10 bg-zinc-900/50 p-8 flex items-center justify-center overflow-hidden">
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(16,185,129,0.1)_0%,transparent_70%)]"></div>
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(234,179,8,0.1)_0%,transparent_70%)]"></div>
                 <div className="relative grid grid-cols-2 gap-4 w-full">
                   {[1, 2, 3, 4].map((n) => (
                     <div key={n} className="aspect-video bg-black/40 border border-white/5 rounded-2xl animate-pulse"></div>
                   ))}
                 </div>
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <Shield size={120} className="text-emerald-500/20" />
+                  <Shield size={120} className="text-yellow-500/20" />
                 </div>
               </div>
             </div>
@@ -478,7 +478,7 @@ export default function LandingPage({ user, onLaunchApp, onViewDemo }: LandingPa
       <section className="py-32 md:py-48 px-4 md:px-8">
         <div className="max-w-[1400px] mx-auto text-center">
           <h2 className="text-5xl sm:text-7xl md:text-9xl font-display font-bold text-white mb-10 md:mb-16 uppercase tracking-tighter leading-[0.9] md:leading-[0.8]">
-            The Future <br /> is <span className="text-emerald-500">Autonomous</span>
+            The Future <br /> is <span className="text-yellow-500">Autonomous</span>
           </h2>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-6 md:gap-8">
             <button 
@@ -500,7 +500,7 @@ export default function LandingPage({ user, onLaunchApp, onViewDemo }: LandingPa
           <div className="grid grid-cols-1 md:grid-cols-4 gap-16 mb-24">
             <div className="col-span-2">
               <div className="flex items-center gap-4 mb-8">
-                <div className="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center">
+                <div className="w-10 h-10 bg-yellow-500 rounded-xl flex items-center justify-center">
                   <Bot className="text-black" size={24} />
                 </div>
                 <span className="text-2xl font-display font-bold text-white">OpenClaw</span>

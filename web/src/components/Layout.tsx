@@ -41,11 +41,11 @@ const SidebarItem = ({ icon: Icon, label, id, active, href }: any) => (
     className={cn(
       "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group",
       active 
-        ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" 
+        ? "bg-yellow-500/10 text-yellow-400 border border-yellow-500/20" 
         : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200"
     )}
   >
-    <Icon size={20} className={cn(active ? "text-emerald-400" : "group-hover:scale-110 transition-transform")} />
+    <Icon size={20} className={cn(active ? "text-yellow-400" : "group-hover:scale-110 transition-transform")} />
     <span className="font-medium">{label}</span>
     {active && <ChevronRight size={16} className="ml-auto opacity-50" />}
   </Link>
@@ -87,7 +87,7 @@ export default function Layout({ children, activeTab, basePath, user, account, i
   ];
 
   return (
-    <div className="min-h-screen bg-[#0A0A0B] text-zinc-100 font-sans selection:bg-emerald-500/30 overflow-x-hidden">
+    <div className="min-h-screen bg-[#0A0A0B] text-zinc-100 font-sans selection:bg-yellow-500/30 overflow-x-hidden">
       {/* Mobile Overlay */}
       {isMobileMenuOpen && (
         <div 
@@ -108,7 +108,7 @@ export default function Layout({ children, activeTab, basePath, user, account, i
         <div className="flex flex-col h-full p-4">
           <div className="flex items-center justify-between mb-8 px-2">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/20">
+              <div className="w-10 h-10 bg-yellow-500 rounded-xl flex items-center justify-center shadow-lg shadow-yellow-500/20">
                 <Bot className="text-black" size={24} />
               </div>
               {(isSidebarOpen || isMobileMenuOpen) && (
@@ -165,7 +165,7 @@ export default function Layout({ children, activeTab, basePath, user, account, i
         "pl-0"
       )}>
         {isGuest && (
-          <div className="bg-emerald-500 text-black px-4 md:px-6 py-2 flex flex-col md:flex-row items-center justify-between text-[10px] md:text-xs font-bold gap-2 sticky top-0 z-40">
+          <div className="bg-yellow-500 text-black px-4 md:px-6 py-2 flex flex-col md:flex-row items-center justify-between text-[10px] md:text-xs font-bold gap-2 sticky top-0 z-40">
             <div className="flex items-center gap-2">
               <Bot size={14} className="shrink-0" />
               <span className="text-center md:text-left">DEMO MODE: You are viewing the dashboard as a guest. Data is simulated and not saved.</span>
@@ -201,7 +201,7 @@ export default function Layout({ children, activeTab, basePath, user, account, i
               <input 
                 type="text" 
                 placeholder="Search symbols, agents, or orders..." 
-                className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-2 pl-10 pr-4 text-sm focus:outline-none focus:border-emerald-500/50 transition-all"
+                className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-2 pl-10 pr-4 text-sm focus:outline-none focus:border-yellow-500/50 transition-all"
               />
             </div>
           </div>
@@ -210,7 +210,7 @@ export default function Layout({ children, activeTab, basePath, user, account, i
             <div className="hidden sm:flex items-center gap-4 md:gap-6 border-r border-zinc-800 pr-4 md:pr-6 mr-1 md:mr-2">
               <div className="text-right">
                 <p className="text-[8px] md:text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Cash Balance</p>
-                <p className="text-xs md:text-sm font-mono text-emerald-400">${Number(account?.cashBalance ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+                <p className="text-xs md:text-sm font-mono text-yellow-400">${Number(account?.cashBalance ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
               </div>
               <div className="text-right hidden lg:block">
                 <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Account Mode</p>
@@ -220,7 +220,7 @@ export default function Layout({ children, activeTab, basePath, user, account, i
             
             <button className="relative p-2 text-zinc-400 hover:text-zinc-200 transition-colors">
               <Bell size={20} />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-emerald-500 rounded-full border-2 border-[#0F0F11]"></span>
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-yellow-500 rounded-full border-2 border-[#0F0F11]"></span>
             </button>
           </div>
         </header>

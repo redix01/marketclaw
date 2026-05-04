@@ -405,17 +405,17 @@ export default function Assets({ positions, symbols, account, serverTrades, serv
               </div>
               <div>
                 <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold">PNL (Realized)</p>
-                <p className={`mt-1 text-2xl font-mono ${sessionRealized >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                <p className={`mt-1 text-2xl font-mono ${sessionRealized >= 0 ? 'text-yellow-400' : 'text-rose-400'}`}>
                   {formatSignedMoney(sessionRealized, 2)}
                 </p>
-                <p className={`mt-1 text-[10px] font-bold ${sessionRealized >= 0 ? 'text-emerald-400/80' : 'text-rose-400/80'}`}>
+                <p className={`mt-1 text-[10px] font-bold ${sessionRealized >= 0 ? 'text-yellow-400/80' : 'text-rose-400/80'}`}>
                   {realizedPercent >= 0 ? '+' : ''}{realizedPercent.toFixed(2)}%
                 </p>
               </div>
               <div className="col-span-2 grid grid-cols-2 gap-2 mt-1">
-                <div className="rounded-md bg-emerald-500/10 border border-emerald-500/20 px-2 py-1">
-                  <p className="text-[9px] uppercase tracking-wider text-emerald-400/80 font-bold">R</p>
-                  <p className="text-xs font-mono text-emerald-300">{formatSignedMoney(sessionRealized, 2)}</p>
+                <div className="rounded-md bg-yellow-500/10 border border-yellow-500/20 px-2 py-1">
+                  <p className="text-[9px] uppercase tracking-wider text-yellow-400/80 font-bold">R</p>
+                  <p className="text-xs font-mono text-yellow-300">{formatSignedMoney(sessionRealized, 2)}</p>
                 </div>
                 <div className="rounded-md bg-rose-500/10 border border-rose-500/20 px-2 py-1">
                   <p className="text-[9px] uppercase tracking-wider text-rose-400/80 font-bold">U</p>
@@ -433,14 +433,14 @@ export default function Assets({ positions, symbols, account, serverTrades, serv
               <div>
                 <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold">Active</p>
                 <p className="mt-1 text-xl font-mono text-white">{sessionDuration}</p>
-                <p className="mt-1 text-[10px] text-emerald-400/80 font-bold">{winRate}% win</p>
+                <p className="mt-1 text-[10px] text-yellow-400/80 font-bold">{winRate}% win</p>
               </div>
             </div>
           </div>
 
           <div className="px-5 pt-4 pb-2 flex items-center justify-between">
             <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500 font-bold">Active Grids</p>
-            <span className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded-full bg-emerald-500/15 text-emerald-300 text-[10px] font-bold border border-emerald-500/25">
+            <span className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded-full bg-yellow-500/15 text-yellow-300 text-[10px] font-bold border border-yellow-500/25">
               {activeCount}
             </span>
           </div>
@@ -471,7 +471,7 @@ export default function Assets({ positions, symbols, account, serverTrades, serv
                       <Minus size={12} className={isSelected ? 'text-yellow-300' : 'text-zinc-600'} />
                       <span className="font-bold text-white text-sm truncate">{grid.symbol}</span>
                     </div>
-                    <span className={`font-mono text-xs ${positive ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    <span className={`font-mono text-xs ${positive ? 'text-yellow-400' : 'text-rose-400'}`}>
                       {formatSignedMoney(pnl, 4)}
                     </span>
                   </div>
@@ -508,8 +508,8 @@ export default function Assets({ positions, symbols, account, serverTrades, serv
                   </div>
 
                   <div className="ml-5 flex items-center gap-3 text-[10px] font-mono">
-                    <span className="text-zinc-500">R: <span className={entry.realizedPnL >= 0 ? 'text-emerald-400' : 'text-rose-400'}>{formatSignedMoney(entry.realizedPnL, 4)}</span></span>
-                    <span className="text-zinc-500">U: <span className={pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}>{formatSignedMoney(pnl, 4)}</span></span>
+                    <span className="text-zinc-500">R: <span className={entry.realizedPnL >= 0 ? 'text-yellow-400' : 'text-rose-400'}>{formatSignedMoney(entry.realizedPnL, 4)}</span></span>
+                    <span className="text-zinc-500">U: <span className={pnl >= 0 ? 'text-yellow-400' : 'text-rose-400'}>{formatSignedMoney(pnl, 4)}</span></span>
                   </div>
                 </button>
               );
@@ -591,8 +591,8 @@ function DetailPane({
           <div className="flex items-center gap-3 text-xs text-zinc-500 mt-0.5">
             <span>{grid.symbol}/USDT</span>
             <span className="inline-flex items-center gap-1.5">
-              <span className={`w-1.5 h-1.5 rounded-full ${grid.active ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-600'}`} />
-              <span className={`text-[11px] uppercase tracking-wider font-bold ${grid.active ? 'text-emerald-400' : 'text-zinc-500'}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${grid.active ? 'bg-yellow-400 animate-pulse' : 'bg-zinc-600'}`} />
+              <span className={`text-[11px] uppercase tracking-wider font-bold ${grid.active ? 'text-yellow-400' : 'text-zinc-500'}`}>
                 {grid.active ? 'Active' : 'Paused'}
               </span>
             </span>
@@ -603,27 +603,27 @@ function DetailPane({
       <div className="rounded-2xl bg-zinc-900/40 border border-zinc-800/60 px-6 py-5">
         <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500 font-bold mb-2">Unrealized PNL</p>
         <div className="flex items-baseline gap-3">
-          <p className={`text-5xl font-mono ${positive ? 'text-emerald-400' : 'text-rose-400'}`}>
+          <p className={`text-5xl font-mono ${positive ? 'text-yellow-400' : 'text-rose-400'}`}>
             {formatSignedMoney(totalPnL, 4)}
           </p>
-          <p className={`text-sm font-bold ${positive ? 'text-emerald-400/80' : 'text-rose-400/80'}`}>
+          <p className={`text-sm font-bold ${positive ? 'text-yellow-400/80' : 'text-rose-400/80'}`}>
             {pnlPercent >= 0 ? '+' : ''}{pnlPercent.toFixed(2)}%
           </p>
         </div>
         <div className="mt-4 flex items-center gap-6 text-xs">
-          <span className="text-zinc-500">Realized: <span className={selected.realizedPnL >= 0 ? 'text-emerald-400' : 'text-rose-400'}>{formatSignedMoney(selected.realizedPnL, 4)}</span></span>
-          <span className="text-zinc-500">Unrealized: <span className={selected.unrealizedPnL >= 0 ? 'text-emerald-400' : 'text-rose-400'}>{formatSignedMoney(selected.unrealizedPnL, 4)}</span></span>
+          <span className="text-zinc-500">Realized: <span className={selected.realizedPnL >= 0 ? 'text-yellow-400' : 'text-rose-400'}>{formatSignedMoney(selected.realizedPnL, 4)}</span></span>
+          <span className="text-zinc-500">Unrealized: <span className={selected.unrealizedPnL >= 0 ? 'text-yellow-400' : 'text-rose-400'}>{formatSignedMoney(selected.unrealizedPnL, 4)}</span></span>
         </div>
       </div>
 
       <div className="rounded-2xl bg-zinc-900/40 border border-zinc-800/60 px-6 py-5">
         <div className="flex items-center justify-between">
           <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500 font-bold">Wallet Exposure</p>
-          <p className="text-emerald-400 font-mono text-sm">{grid.exposurePercent.toFixed(1)}%</p>
+          <p className="text-yellow-400 font-mono text-sm">{grid.exposurePercent.toFixed(1)}%</p>
         </div>
         <div className="mt-3 h-1.5 rounded-full bg-zinc-800 overflow-hidden">
           <div
-            className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-emerald-300 transition-[width] duration-700"
+            className="h-full rounded-full bg-gradient-to-r from-yellow-500 to-yellow-300 transition-[width] duration-700"
             style={{ width: `${Math.min(grid.exposurePercent, 100)}%` }}
           />
         </div>
@@ -639,10 +639,10 @@ function DetailPane({
           <ParamRow label="Leverage" value={`${grid.leverage}x`} />
           <ParamRow label="Order Size" value={formatMoney(orderSize)} />
           <ParamRow label="Allocated Margin" value={formatMoney(grid.margin)} />
-          <ParamRow label="Wallet Exposure" value={`${grid.exposurePercent.toFixed(1)}%`} valueClassName="text-emerald-400" />
+          <ParamRow label="Wallet Exposure" value={`${grid.exposurePercent.toFixed(1)}%`} valueClassName="text-yellow-400" />
           <ParamRow label="Grid Levels" value={grid.totalLevels.toString()} />
           <ParamRow label="Fills" value={selected.filledLevels.toString()} />
-          <ParamRow label="Current Price" value={`$${formatPrice(selected.price)}`} valueClassName={selected.changePercent >= 0 ? 'text-emerald-400' : 'text-rose-400'} />
+          <ParamRow label="Current Price" value={`$${formatPrice(selected.price)}`} valueClassName={selected.changePercent >= 0 ? 'text-yellow-400' : 'text-rose-400'} />
           <ParamRow label="Upper Price" value={`$${formatPrice(upper)}`} />
           <ParamRow label="Lower Price" value={`$${formatPrice(lower)}`} />
           <ParamRow label="Duration" value={formatDuration(Math.floor((Date.now() - grid.openedAt) / 60000))} />
@@ -705,10 +705,10 @@ function HistoryPane({
           {rows.map((row) => (
             <div key={row.id} className="grid grid-cols-[80px_60px_1fr_1fr_1fr] px-4 py-3 text-xs font-mono items-center">
               <span className="text-zinc-500">{row.time}</span>
-              <span className={`font-bold ${row.side === 'Buy' ? 'text-emerald-400' : 'text-rose-400'}`}>{row.side}</span>
+              <span className={`font-bold ${row.side === 'Buy' ? 'text-yellow-400' : 'text-rose-400'}`}>{row.side}</span>
               <span className="text-right text-white">${formatPrice(row.price)}</span>
               <span className="text-right text-zinc-300">{row.size.toFixed(2)}</span>
-              <span className={`text-right ${row.pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{formatSignedMoney(row.pnl, 4)}</span>
+              <span className={`text-right ${row.pnl >= 0 ? 'text-yellow-400' : 'text-rose-400'}`}>{formatSignedMoney(row.pnl, 4)}</span>
             </div>
           ))}
         </div>
@@ -796,7 +796,7 @@ function ClosedTradesSection({ trades, summary }: { trades: ClosedTrade[]; summa
                 onClick={() => setFilterType(option)}
                 className={`px-2.5 py-1.5 rounded-lg text-[10px] font-bold border transition-all ${
                   filterType === option
-                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                    ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-300'
                     : 'border-zinc-800 text-zinc-500 hover:border-zinc-700'
                 }`}
               >
@@ -821,15 +821,15 @@ function ClosedTradesSection({ trades, summary }: { trades: ClosedTrade[]; summa
           <p className="text-[9px] uppercase tracking-wider text-zinc-500 font-bold">Total Trades</p>
           <p className="mt-1 text-lg font-mono font-bold text-white">{stats.totalTrades}</p>
         </div>
-        <div className={`rounded-xl border bg-zinc-900/30 px-3 py-2 ${stats.totalRealizedPnl >= 0 ? 'border-emerald-500/20' : 'border-rose-500/20'}`}>
+        <div className={`rounded-xl border bg-zinc-900/30 px-3 py-2 ${stats.totalRealizedPnl >= 0 ? 'border-yellow-500/20' : 'border-rose-500/20'}`}>
           <p className="text-[9px] uppercase tracking-wider text-zinc-500 font-bold">Realized P&L</p>
-          <p className={`mt-1 text-lg font-mono font-bold ${stats.totalRealizedPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+          <p className={`mt-1 text-lg font-mono font-bold ${stats.totalRealizedPnl >= 0 ? 'text-yellow-400' : 'text-rose-400'}`}>
             {formatSigned(stats.totalRealizedPnl)}
           </p>
         </div>
         <div className="rounded-xl border border-zinc-800/70 bg-zinc-900/30 px-3 py-2">
           <p className="text-[9px] uppercase tracking-wider text-zinc-500 font-bold">Avg Return</p>
-          <p className={`mt-1 text-lg font-mono font-bold ${stats.avgPnlPercent >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+          <p className={`mt-1 text-lg font-mono font-bold ${stats.avgPnlPercent >= 0 ? 'text-yellow-400' : 'text-rose-400'}`}>
             {stats.avgPnlPercent >= 0 ? '+' : ''}{stats.avgPnlPercent.toFixed(2)}%
           </p>
         </div>
@@ -847,9 +847,9 @@ function ClosedTradesSection({ trades, summary }: { trades: ClosedTrade[]; summa
           >
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${trade.realizedPnl >= 0 ? 'bg-emerald-500/10' : 'bg-rose-500/10'}`}>
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${trade.realizedPnl >= 0 ? 'bg-yellow-500/10' : 'bg-rose-500/10'}`}>
                   {trade.realizedPnl >= 0 ? (
-                    <ArrowUpRight size={14} className="text-emerald-400" />
+                    <ArrowUpRight size={14} className="text-yellow-400" />
                   ) : (
                     <ArrowDownRight size={14} className="text-rose-400" />
                   )}
@@ -879,10 +879,10 @@ function ClosedTradesSection({ trades, summary }: { trades: ClosedTrade[]; summa
               </div>
 
               <div className="text-right">
-                <p className={`text-sm font-mono font-bold ${trade.realizedPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                <p className={`text-sm font-mono font-bold ${trade.realizedPnl >= 0 ? 'text-yellow-400' : 'text-rose-400'}`}>
                   {formatSigned(trade.realizedPnl)}
                 </p>
-                <p className={`text-[10px] font-bold ${trade.pnlPercent >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                <p className={`text-[10px] font-bold ${trade.pnlPercent >= 0 ? 'text-yellow-400' : 'text-rose-400'}`}>
                   {trade.pnlPercent >= 0 ? '+' : ''}{trade.pnlPercent.toFixed(2)}%
                 </p>
                 <p className="text-[9px] text-zinc-500 mt-0.5">

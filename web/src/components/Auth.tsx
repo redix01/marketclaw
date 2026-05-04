@@ -47,7 +47,7 @@ export default function Auth({ onAuthenticated }: AuthProps) {
     <div className="min-h-screen bg-[#0A0A0B] flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-12">
-          <div className="w-16 h-16 bg-emerald-500 rounded-2xl flex items-center justify-center shadow-2xl shadow-emerald-500/20 mx-auto mb-6">
+          <div className="w-16 h-16 bg-yellow-500 rounded-2xl flex items-center justify-center shadow-2xl shadow-yellow-500/20 mx-auto mb-6">
             <Bot className="text-black" size={32} />
           </div>
           <h1 className="text-3xl font-bold tracking-tight text-white mb-2">Welcome to OpenClaw</h1>
@@ -59,14 +59,14 @@ export default function Auth({ onAuthenticated }: AuthProps) {
             <button
               type="button"
               onClick={() => setMode('login')}
-              className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all ${mode === 'login' ? 'bg-emerald-500 text-black' : 'text-zinc-500 hover:text-zinc-300'}`}
+              className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all ${mode === 'login' ? 'bg-yellow-500 text-black' : 'text-zinc-500 hover:text-zinc-300'}`}
             >
               Login
             </button>
             <button
               type="button"
               onClick={() => setMode('register')}
-              className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all ${mode === 'register' ? 'bg-emerald-500 text-black' : 'text-zinc-500 hover:text-zinc-300'}`}
+              className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all ${mode === 'register' ? 'bg-yellow-500 text-black' : 'text-zinc-500 hover:text-zinc-300'}`}
             >
               Register
             </button>
@@ -88,7 +88,7 @@ export default function Auth({ onAuthenticated }: AuthProps) {
                   value={name}
                   onChange={(event) => setName(event.target.value)}
                   required
-                  className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-3 px-4 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-emerald-500/50 transition-all"
+                  className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-3 px-4 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-yellow-500/50 transition-all"
                 />
               </div>
             )}
@@ -100,7 +100,7 @@ export default function Auth({ onAuthenticated }: AuthProps) {
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 required
-                className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-3 px-4 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-emerald-500/50 transition-all"
+                className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-3 px-4 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-yellow-500/50 transition-all"
               />
             </div>
 
@@ -112,7 +112,7 @@ export default function Auth({ onAuthenticated }: AuthProps) {
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                   required
-                  className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-3 pl-4 pr-12 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-emerald-500/50 transition-all"
+                  className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-3 pl-4 pr-12 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-yellow-500/50 transition-all"
                 />
                 <button
                   type="button"
@@ -134,7 +134,7 @@ export default function Auth({ onAuthenticated }: AuthProps) {
                     value={passwordConfirmation}
                     onChange={(event) => setPasswordConfirmation(event.target.value)}
                     required
-                    className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-3 pl-4 pr-12 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-emerald-500/50 transition-all"
+                    className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-3 pl-4 pr-12 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-yellow-500/50 transition-all"
                   />
                   <button
                     type="button"

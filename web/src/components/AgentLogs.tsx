@@ -12,7 +12,7 @@ export default function AgentLogs({ logs }: AgentLogsProps) {
       <div className="bg-[#0F0F11] border border-zinc-800/50 rounded-2xl p-6">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-emerald-500/10 text-emerald-400 rounded-xl">
+            <div className="p-2.5 bg-yellow-500/10 text-yellow-400 rounded-xl">
               <ScrollText size={20} />
             </div>
             <div>
@@ -27,7 +27,7 @@ export default function AgentLogs({ logs }: AgentLogsProps) {
               <input 
                 type="text" 
                 placeholder="Filter logs..." 
-                className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-2 pl-10 pr-4 text-xs focus:outline-none focus:border-emerald-500/50 transition-all"
+                className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-2 pl-10 pr-4 text-xs focus:outline-none focus:border-yellow-500/50 transition-all"
               />
             </div>
             <button className="p-2 bg-zinc-900 border border-zinc-800 rounded-xl text-zinc-400 hover:text-zinc-200 transition-colors">
@@ -44,7 +44,7 @@ export default function AgentLogs({ logs }: AgentLogsProps) {
                   <div className={`p-1.5 rounded-lg ${
                     log.eventType === 'decision' ? 'bg-blue-500/10 text-blue-400' :
                     log.eventType === 'risk_block' ? 'bg-rose-500/10 text-rose-400' :
-                    log.eventType === 'order_submitted' ? 'bg-emerald-500/10 text-emerald-400' :
+                    log.eventType === 'order_submitted' ? 'bg-yellow-500/10 text-yellow-400' :
                     'bg-zinc-800 text-zinc-500'
                   }`}>
                     {log.eventType === 'decision' ? <Zap size={14} /> :

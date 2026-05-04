@@ -26,7 +26,7 @@ function normalizeTab(tab?: string): AppTab {
 function LoadingScreen() {
   return (
     <div className="min-h-screen bg-[#0A0A0B] flex items-center justify-center">
-      <div className="w-12 h-12 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin"></div>
+      <div className="w-12 h-12 border-4 border-yellow-500/20 border-t-yellow-500 rounded-full animate-spin"></div>
     </div>
   );
 }
