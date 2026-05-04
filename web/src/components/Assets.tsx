@@ -88,6 +88,39 @@ function nextGridId(symbol: string) {
   return `${symbol}-${gridIdCounter}`;
 }
 
+const STORAGE_KEY = 'marketclaw:grid-session:v1';
+
+interface PersistedSession {
+  sessionStart: number;
+  grids: GridConfig[];
+  closedTrades: ClosedTrade[];
+  sessionRealized: number;
+  selectedSymbol: string;
+  gridIdCounter: number;
+}
+
+function loadPersisted(): PersistedSession | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as PersistedSession;
+    if (!parsed || !Array.isArray(parsed.grids) || !Array.isArray(parsed.closedTrades)) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function savePersisted(state: PersistedSession) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    /* quota or disabled */
+  }
+}
+
 function buildGrid(symbol: SymbolInfo, index: number, openedAt: number): GridConfig {
   const seed = symbolSeed(symbol.symbol) + Math.floor(Math.random() * 97);
   const totalLevels = clamp(10 + ((seed + index) % 18), 10, 28);
@@ -149,12 +182,23 @@ export default function Assets({ positions, symbols, account }: AssetsProps) {
   const liveSymbolsRef = useRef(liveSymbols);
   liveSymbolsRef.current = liveSymbols;
 
-  const sessionStartRef = useRef<number>(Date.now());
-  const [grids, setGrids] = useState<GridConfig[]>(() =>
-    liveSymbols.map((symbol, index) => buildGrid(symbol, index, Date.now()))
+  const persistedRef = useRef<PersistedSession | null>(loadPersisted());
+
+  const sessionStartRef = useRef<number>(persistedRef.current?.sessionStart ?? Date.now());
+  const [grids, setGrids] = useState<GridConfig[]>(() => {
+    if (persistedRef.current?.grids?.length) {
+      const maxId = persistedRef.current.gridIdCounter ?? 0;
+      gridIdCounter = Math.max(gridIdCounter, maxId);
+      return persistedRef.current.grids;
+    }
+    return liveSymbols.map((symbol, index) => buildGrid(symbol, index, Date.now()));
+  });
+  const [closedTrades, setClosedTrades] = useState<ClosedTrade[]>(
+    () => persistedRef.current?.closedTrades ?? []
   );
-  const [closedTrades, setClosedTrades] = useState<ClosedTrade[]>([]);
-  const [sessionRealized, setSessionRealized] = useState(0);
+  const [sessionRealized, setSessionRealized] = useState(
+    () => persistedRef.current?.sessionRealized ?? 0
+  );
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
@@ -162,7 +206,9 @@ export default function Assets({ positions, symbols, account }: AssetsProps) {
     return () => window.clearInterval(id);
   }, []);
 
-  const [selectedSymbol, setSelectedSymbol] = useState<string>(grids[0]?.symbol ?? '');
+  const [selectedSymbol, setSelectedSymbol] = useState<string>(
+    () => persistedRef.current?.selectedSymbol ?? grids[0]?.symbol ?? ''
+  );
   const [ticks, setTicks] = useState<Record<string, GridTick>>({});
   const ticksRef = useRef<Record<string, GridTick>>({});
   ticksRef.current = ticks;
@@ -247,6 +293,32 @@ export default function Assets({ positions, symbols, account }: AssetsProps) {
     frame = window.requestAnimationFrame(loop);
     return () => window.cancelAnimationFrame(frame);
   }, []);
+
+  useEffect(() => {
+    savePersisted({
+      sessionStart: sessionStartRef.current,
+      grids,
+      closedTrades,
+      sessionRealized,
+      selectedSymbol,
+      gridIdCounter,
+    });
+  }, [grids, closedTrades, sessionRealized, selectedSymbol]);
+
+  useEffect(() => {
+    const handleUnload = () => {
+      savePersisted({
+        sessionStart: sessionStartRef.current,
+        grids: gridsRef.current,
+        closedTrades,
+        sessionRealized,
+        selectedSymbol,
+        gridIdCounter,
+      });
+    };
+    window.addEventListener('beforeunload', handleUnload);
+    return () => window.removeEventListener('beforeunload', handleUnload);
+  }, [closedTrades, sessionRealized, selectedSymbol]);
 
   const enriched = useMemo(
     () =>
