@@ -785,7 +785,7 @@ function ClosedTradesSection({ trades, summary }: { trades: ClosedTrade[]; summa
     <div className="p-6">
       <div className="flex items-center justify-between mb-5">
         <div>
-          <h3 className="text-lg font-bold text-white">Closed Trades History</h3>
+          <h3 className="text-lg font-bold text-white">Grid Orders</h3>
           <p className="text-xs text-zinc-500">All auto-closed and manually exited positions.</p>
         </div>
         <div className="flex items-center gap-2">

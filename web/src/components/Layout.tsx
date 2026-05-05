@@ -16,7 +16,8 @@ import {
   User,
   Menu,
   X,
-  ChevronRight
+  ChevronRight,
+  Sliders
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -79,6 +80,7 @@ export default function Layout({ children, activeTab, basePath, user, account, i
     { id: 'overview', label: 'Overview', icon: LayoutDashboard },
     { id: 'portfolio', label: 'Portfolio', icon: Briefcase },
     { id: 'ai-trader', label: 'AI Trader', icon: BarChart3 },
+    { id: 'configuration', label: 'Configuration', icon: Sliders },
     { id: 'trade', label: 'Trade', icon: TrendingUp },
     { id: 'wallet', label: 'Wallet', icon: Wallet },
     { id: 'settings', label: 'Settings', icon: Settings },

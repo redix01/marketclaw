@@ -13,8 +13,9 @@ class AutoCloseProfitablePositions
     public function handle(PaperAccount $account, float $takeProfitPercent = 2.0): array
     {
         $closed = [];
-
         $positions = $account->positions()->with(['symbol.latestQuote'])->get();
+
+        \Illuminate\Support\Facades\Log::info('AutoCloseProfitablePositions: Checking '.$positions->count().' positions with threshold '.$takeProfitPercent.'%');
 
         foreach ($positions as $position) {
             $latestQuote = $position->symbol->latestQuote;
@@ -32,10 +33,16 @@ class AutoCloseProfitablePositions
 
             $pnlPercent = (($currentPrice - $entryPrice) / $entryPrice) * 100;
 
+            \Illuminate\Support\Facades\Log::info('AutoCloseProfitablePositions: '.$position->symbol->ticker.' entry='.$entryPrice.' current='.$currentPrice.' pnl='.$pnlPercent.'%');
+
             if ($pnlPercent >= $takeProfitPercent) {
                 $this->closePosition($account, $position, $currentPrice, $pnlPercent);
                 $closed[] = $position->symbol->ticker;
             }
+        }
+
+        if (count($closed) > 0) {
+            \Illuminate\Support\Facades\Log::info('AutoCloseProfitablePositions: CLOSED '.implode(', ', $closed));
         }
 
         return $closed;
