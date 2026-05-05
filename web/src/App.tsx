@@ -107,7 +107,7 @@ function AppRoutes({
   const guestUser = {
     uid: 'guest-user',
     displayName: 'Guest Trader',
-    email: 'guest@openclaw.io',
+    email: 'guest@marketclaw.io',
     photoURL: null,
   };
 

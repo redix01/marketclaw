@@ -111,7 +111,7 @@ export default function Layout({ children, activeTab, basePath, user, account, i
               </div>
               {(isSidebarOpen || isMobileMenuOpen) && (
                 <span className="text-xl font-bold tracking-tight bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">
-                  OpenClaw
+                  MarketClaw
                 </span>
               )}
             </div>

@@ -85,7 +85,7 @@ export default function LandingPage({ user, onLaunchApp, onViewDemo }: LandingPa
               <Bot className="text-black" size={24} />
             </div>
             <span className="text-xl md:text-2xl font-display font-bold tracking-tight text-white">
-              OpenClaw
+              MarketClaw
             </span>
           </div>
           
@@ -460,7 +460,7 @@ export default function LandingPage({ user, onLaunchApp, onViewDemo }: LandingPa
           
           <div className="space-y-4 md:space-y-6">
             {[
-              { q: "Is this real money?", a: "No. OpenClaw is a high-fidelity paper trading simulator. It uses real-time market data but all capital is simulated." },
+              { q: "Is this real money?", a: "No. MarketClaw is a high-fidelity paper trading simulator. It uses real-time market data but all capital is simulated." },
               { q: "Which AI models power the agents?", a: "We primarily use Google's Gemini 1.5 Pro and Flash models, optimized for financial reasoning and low-latency execution." },
               { q: "Can I export my strategies?", a: "Yes, all agent logic can be exported as standardized JSON or Python-compatible scripts for use in external environments." },
               { q: "What markets are supported?", a: "We support NASDAQ/NYSE equities, major crypto pairs via Binance/Coinbase feeds, and Polymarket prediction contracts." }
@@ -503,7 +503,7 @@ export default function LandingPage({ user, onLaunchApp, onViewDemo }: LandingPa
                 <div className="w-10 h-10 bg-yellow-500 rounded-xl flex items-center justify-center">
                   <Bot className="text-black" size={24} />
                 </div>
-                <span className="text-2xl font-display font-bold text-white">OpenClaw</span>
+                <span className="text-2xl font-display font-bold text-white">MarketClaw</span>
               </div>
               <p className="text-zinc-500 text-lg font-light max-w-md leading-relaxed">
                 Empowering traders with autonomous financial intelligence across every asset class.
@@ -535,7 +535,7 @@ export default function LandingPage({ user, onLaunchApp, onViewDemo }: LandingPa
           
           <div className="pt-12 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-8">
             <p className="text-[10px] text-zinc-600 uppercase tracking-[0.4em] font-bold">
-              © 2026 OpenClaw. All Rights Reserved.
+              © 2026 MarketClaw. All Rights Reserved.
             </p>
             <div className="flex gap-8 text-[10px] text-zinc-600 uppercase tracking-[0.2em] font-bold">
               <a href="#" className="hover:text-white transition-colors">Privacy</a>

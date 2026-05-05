@@ -34,9 +34,9 @@ class ClosedTradesController extends Controller
                 'orders.submitted_at',
                 'orders.filled_at',
                 'orders.source',
-                DB::raw('COALESCE(ledger_entries.meta->\'realized_pnl\', 0) as realized_pnl'),
-                DB::raw('COALESCE(ledger_entries.meta->\'pnl_percent\', 0) as pnl_percent'),
-                DB::raw('COALESCE(ledger_entries.meta->\'auto_closed\', false) as auto_closed')
+                DB::raw("COALESCE(ledger_entries.meta->>'realized_pnl', '0')::numeric as realized_pnl"),
+                DB::raw("COALESCE(ledger_entries.meta->>'pnl_percent', '0')::numeric as pnl_percent"),
+                DB::raw("COALESCE(ledger_entries.meta->>'auto_closed', 'false')::boolean as auto_closed")
             )
             ->orderBy('orders.filled_at', 'desc')
             ->get()

@@ -19,10 +19,9 @@ Route::prefix('v1')->group(function (): void {
     Route::post('/auth/login', [AuthController::class, 'login']);
     Route::get('/markets/symbols', [MarketController::class, 'symbols']);
 
-    Route::middleware('auth:sanctum')->group(function (): void {
-        Route::post('/auth/logout', [AuthController::class, 'logout']);
+    Route::post('/auth/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
 
-        Route::prefix('users/{user}')->middleware('auth.user')->group(function (): void {
+    Route::prefix('users/{user}')->middleware('auth:sanctum', 'auth.user')->group(function (): void {
         Route::get('/me', [MeController::class, 'show']);
         Route::patch('/profile', [MeController::class, 'update']);
         Route::get('/preferences', [PreferenceController::class, 'show']);
@@ -39,6 +38,5 @@ Route::prefix('v1')->group(function (): void {
         Route::post('/orders', [OrderController::class, 'store']);
         Route::get('/ledger', [LedgerController::class, 'index']);
         Route::get('/closed-trades', [ClosedTradesController::class, 'index']);
-        });
     });
 });

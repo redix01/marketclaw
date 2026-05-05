@@ -407,7 +407,7 @@ function CreateAgentModal({ user, onClose }: any) {
                   <span className="text-xs font-bold">Risk Management Active</span>
                 </div>
                 <p className="text-[10px] text-zinc-500 leading-relaxed">
-                  OpenClaw risk gates will automatically block any agent orders that exceed your account buying power or violate your max allocation rules.
+                  MarketClaw risk gates will automatically block any agent orders that exceed your account buying power or violate your max allocation rules.
                 </p>
               </div>
             </div>

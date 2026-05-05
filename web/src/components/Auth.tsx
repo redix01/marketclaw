@@ -50,7 +50,7 @@ export default function Auth({ onAuthenticated }: AuthProps) {
           <div className="w-16 h-16 bg-yellow-500 rounded-2xl flex items-center justify-center shadow-2xl shadow-yellow-500/20 mx-auto mb-6">
             <Bot className="text-black" size={32} />
           </div>
-          <h1 className="text-3xl font-bold tracking-tight text-white mb-2">Welcome to OpenClaw</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-white mb-2">Welcome to MarketClaw</h1>
           <p className="text-zinc-500">Agentic stock & crypto paper-trading platform</p>
         </div>
 
@@ -161,7 +161,7 @@ export default function Auth({ onAuthenticated }: AuthProps) {
           <div className="mt-8 pt-8 border-t border-zinc-800/50">
             <p className="text-[10px] text-center text-zinc-500 uppercase tracking-widest font-bold mb-4">Simulation Only</p>
             <p className="text-xs text-center text-zinc-600 leading-relaxed">
-              By continuing, you acknowledge that OpenClaw is a paper trading simulator. No real money or actual brokerage accounts are involved.
+              By continuing, you acknowledge that MarketClaw is a paper trading simulator. No real money or actual brokerage accounts are involved.
             </p>
           </div>
         </div>

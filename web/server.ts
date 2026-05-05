@@ -14,7 +14,7 @@ async function startServer() {
 
   // API routes
   app.get("/api/health", (req, res) => {
-    res.json({ status: "ok", message: "OpenClaw Server is healthy" });
+    res.json({ status: "ok", message: "MarketClaw Server is healthy" });
   });
 
   // Vite middleware for development
@@ -33,7 +33,7 @@ async function startServer() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`OpenClaw Server running on http://localhost:${PORT}`);
+    console.log(`MarketClaw Server running on http://localhost:${PORT}`);
   });
 }
 
