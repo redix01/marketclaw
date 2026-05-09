@@ -108,6 +108,39 @@ export const tradingService = {
     emitTradingDataChanged();
   },
 
+  async getPreferences(uid: string) {
+    if (uid === 'guest-user') return null;
+    const response = await apiFetch<{ data: { preferences: any } }>(`/users/${uid}/preferences`);
+    return response.data.preferences;
+  },
+
+  async updatePreferences(uid: string, payload: Record<string, any>) {
+    await this.checkGuest(uid);
+    const response = await apiFetch<{ data: { preferences: any } }>(`/users/${uid}/preferences`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+    return response.data.preferences;
+  },
+
+  async startBot(uid: string) {
+    await this.checkGuest(uid);
+    const response = await apiFetch<{ data: { preferences: any } }>(`/users/${uid}/bot/start`, {
+      method: 'POST',
+    });
+    emitTradingDataChanged();
+    return response.data.preferences;
+  },
+
+  async stopBot(uid: string) {
+    await this.checkGuest(uid);
+    const response = await apiFetch<{ data: { preferences: any } }>(`/users/${uid}/bot/stop`, {
+      method: 'POST',
+    });
+    emitTradingDataChanged();
+    return response.data.preferences;
+  },
+
   async placeOrder(uid: string, symbol: string, side: OrderSide, quantity: number, price: number, _assetType: AssetType) {
     await this.checkGuest(uid);
 

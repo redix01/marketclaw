@@ -22,6 +22,14 @@ class UpdatePreferenceRequest extends FormRequest
             'notification_preferences' => ['sometimes', 'array'],
             'notification_preferences.email' => ['sometimes', 'boolean'],
             'notification_preferences.push' => ['sometimes', 'boolean'],
+
+            // Agent / grid trader configuration.
+            'leverage' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            'take_profit_percent' => ['sometimes', 'numeric', 'min:0.1', 'max:50'],
+            'wallet_exposure_percent' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            'emergency_stop_percent' => ['sometimes', 'numeric', 'min:0.1', 'max:50'],
+            'max_open_positions' => ['sometimes', 'integer', 'min:1', 'max:20'],
+            'auto_close_enabled' => ['sometimes', 'boolean'],
         ];
     }
 }

@@ -42,6 +42,13 @@ class EnsurePaperAccount
                     'email' => false,
                     'push' => false,
                 ],
+                'leverage' => 10,
+                'take_profit_percent' => 2.0,
+                'wallet_exposure_percent' => 25,
+                'emergency_stop_percent' => 5.0,
+                'max_open_positions' => 5,
+                'auto_close_enabled' => true,
+                'bot_running' => false,
             ]);
         }
 

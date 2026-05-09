@@ -104,9 +104,18 @@ export default function Trade({ user, account, positions, symbols }: TradeProps)
           <h2 className="text-2xl md:text-3xl font-bold text-white">Trade</h2>
           <p className="text-zinc-400 text-sm mt-1">Execute paper trades at market price</p>
         </div>
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-900 border border-zinc-800">
-          <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse"></span>
-          <span className="text-xs font-medium text-zinc-400">Live Market Data</span>
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-3 px-4 py-2 rounded-xl bg-zinc-900 border border-zinc-800">
+            <Wallet size={16} className="text-yellow-400" />
+            <div className="flex flex-col leading-tight">
+              <span className="text-[9px] uppercase tracking-wider text-zinc-500 font-bold">Wallet</span>
+              <span className="text-sm font-mono font-bold text-white">${formatPrice(account?.cashBalance ?? 0)}</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-900 border border-zinc-800">
+            <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse"></span>
+            <span className="text-xs font-medium text-zinc-400">Live Market Data</span>
+          </div>
         </div>
       </div>
 
@@ -274,15 +283,55 @@ export default function Trade({ user, account, positions, symbols }: TradeProps)
                 </div>
               </div>
 
-              {/* Holdings & Value Display */}
+              {/* Quick amount chips */}
+              {side === 'buy' && (account?.cashBalance ?? 0) > 0 && selectedPrice > 0 && (
+                <div className="flex items-center gap-2">
+                  {[0.1, 0.25, 0.5, 1].map((pct) => (
+                    <button
+                      key={pct}
+                      type="button"
+                      onClick={() => {
+                        const cash = account?.cashBalance ?? 0;
+                        const qty = (cash * pct) / selectedPrice;
+                        const stepped = selectedSymbol?.type === 'crypto'
+                          ? Number(qty.toFixed(6))
+                          : Math.max(1, Math.floor(qty));
+                        setQuantity(stepped);
+                      }}
+                      className="flex-1 py-1.5 rounded-lg bg-zinc-950 border border-zinc-800 hover:border-yellow-500/40 text-xs font-bold text-zinc-300 transition-colors"
+                    >
+                      {pct === 1 ? 'MAX' : `${pct * 100}%`}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Holdings, Value, Wallet, After-trade */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="p-3 bg-zinc-950 rounded-xl border border-zinc-800">
                   <p className="text-xs text-zinc-500">Holding</p>
-                  <p className="text-lg font-mono text-white mt-1">{currentPosition?.quantity || 0}</p>
+                  <p className="text-lg font-mono text-white mt-1">
+                    {(currentPosition?.quantity || 0).toLocaleString(undefined, { maximumFractionDigits: 6 })}
+                  </p>
                 </div>
                 <div className="p-3 bg-zinc-950 rounded-xl border border-zinc-800">
-                  <p className="text-xs text-zinc-500">Total Value</p>
+                  <p className="text-xs text-zinc-500">{side === 'buy' ? 'Estimated Cost' : 'Estimated Proceeds'}</p>
                   <p className="text-lg font-mono text-white mt-1">${formatPrice(estimatedValue)}</p>
+                </div>
+                <div className="p-3 bg-zinc-950 rounded-xl border border-zinc-800">
+                  <p className="text-xs text-zinc-500">Wallet</p>
+                  <p className="text-lg font-mono text-white mt-1">${formatPrice(account?.cashBalance ?? 0)}</p>
+                </div>
+                <div className="p-3 bg-zinc-950 rounded-xl border border-zinc-800">
+                  <p className="text-xs text-zinc-500">After Trade</p>
+                  <p className="text-lg font-mono text-white mt-1">
+                    ${formatPrice(
+                      Math.max(
+                        0,
+                        (account?.cashBalance ?? 0) + (side === 'buy' ? -estimatedValue : estimatedValue)
+                      )
+                    )}
+                  </p>
                 </div>
               </div>
 

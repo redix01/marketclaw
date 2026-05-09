@@ -22,7 +22,7 @@ class DashboardController extends Controller
         $marketDataRefreshService->refreshStaleQuotes(1);
         $account = $ensurePaperAccount->handle($user);
 
-        $autoCloseProfitablePositions->handle($account, 2.0);
+        $autoCloseProfitablePositions->handle($account);
 
         return response()->json([
             'data' => $buildDashboardSnapshot->handle($account),

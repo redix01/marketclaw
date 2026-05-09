@@ -17,6 +17,7 @@ import {
   ShieldAlert,
 } from 'lucide-react';
 import { MOCK_SYMBOLS } from '../constants';
+import { tradingService } from '../services/tradingService';
 import { Account, ClosedTrade, ClosedTradesSummary, Position, SymbolInfo } from '../types';
 
 interface AssetsProps {
@@ -26,6 +27,7 @@ interface AssetsProps {
   account: Account | null;
   serverTrades: ClosedTrade[];
   serverTradesSummary: ClosedTradesSummary | null;
+  user?: any;
 }
 
 interface TraderConfig {
@@ -248,31 +250,86 @@ function tickGrid(config: GridConfig, prevTick: GridTick | undefined, nowMs: num
   return { price, changePercent, unrealizedPnL, realizedPnL, filledLevels };
 }
 
-export default function Assets({ positions, symbols, account, serverTrades, serverTradesSummary }: AssetsProps) {
+export default function Assets({ positions, symbols, account, serverTrades, serverTradesSummary, user }: AssetsProps) {
   const liveSymbols = symbols.length > 0 ? symbols : MOCK_SYMBOLS;
+  const uid = user?.uid;
+  const isGuest = !uid || uid === 'guest-user';
 
   const [config, setConfig] = useState<TraderConfig>(() => loadStoredConfig() ?? DEFAULT_CONFIG);
   const [running, setRunning] = useState<boolean>(() => loadRunning() && loadStoredConfig() !== null);
+  const [busy, setBusy] = useState(false);
 
-  const handleStart = (next: TraderConfig) => {
+  // Hydrate config + running flag from the server preferences on mount,
+  // so the trader's state persists across browsers and devices.
+  useEffect(() => {
+    if (isGuest) return;
+    let cancelled = false;
+    void tradingService.getPreferences(uid).then((prefs) => {
+      if (cancelled || !prefs) return;
+      const next: TraderConfig = {
+        leverage: prefs.leverage ?? DEFAULT_CONFIG.leverage,
+        takeProfitPercent: prefs.take_profit_percent ?? DEFAULT_CONFIG.takeProfitPercent,
+        walletExposurePercent: prefs.wallet_exposure_percent ?? DEFAULT_CONFIG.walletExposurePercent,
+        emergencyStopPercent: prefs.emergency_stop_percent ?? DEFAULT_CONFIG.emergencyStopPercent,
+        maxOpenPositions: prefs.max_open_positions ?? DEFAULT_CONFIG.maxOpenPositions,
+        autoCloseEnabled: prefs.auto_close_enabled ?? DEFAULT_CONFIG.autoCloseEnabled,
+      };
+      setConfig(next);
+      try {
+        window.localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(next));
+      } catch { /* ignore */ }
+      if (typeof prefs.bot_running === 'boolean') {
+        setRunning(prefs.bot_running);
+        try {
+          window.localStorage.setItem(RUNTIME_STORAGE_KEY, prefs.bot_running ? '1' : '0');
+        } catch { /* ignore */ }
+      }
+    }).catch(() => { /* leave defaults */ });
+    return () => { cancelled = true; };
+  }, [uid, isGuest]);
+
+  const handleStart = async (next: TraderConfig) => {
     setConfig(next);
+    setBusy(true);
     try {
       window.localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(next));
       window.localStorage.setItem(RUNTIME_STORAGE_KEY, '1');
-      // Reset existing grid session so the new config is reflected immediately.
+      // Reset existing grid simulation so the new config is reflected immediately.
       window.localStorage.removeItem(STORAGE_KEY);
-    } catch {
-      /* ignore */
+    } catch { /* ignore */ }
+
+    if (!isGuest) {
+      try {
+        await tradingService.updatePreferences(uid, {
+          leverage: next.leverage,
+          take_profit_percent: next.takeProfitPercent,
+          wallet_exposure_percent: next.walletExposurePercent,
+          emergency_stop_percent: next.emergencyStopPercent,
+          max_open_positions: next.maxOpenPositions,
+          auto_close_enabled: next.autoCloseEnabled,
+        });
+        await tradingService.startBot(uid);
+      } catch (err) {
+        console.error('Failed to start agent on server:', err);
+      }
     }
+    setBusy(false);
     setRunning(true);
   };
 
-  const handleStop = () => {
+  const handleStop = async () => {
+    setBusy(true);
     try {
       window.localStorage.setItem(RUNTIME_STORAGE_KEY, '0');
-    } catch {
-      /* ignore */
+    } catch { /* ignore */ }
+    if (!isGuest) {
+      try {
+        await tradingService.stopBot(uid);
+      } catch (err) {
+        console.error('Failed to stop agent on server:', err);
+      }
     }
+    setBusy(false);
     setRunning(false);
   };
 
@@ -283,6 +340,7 @@ export default function Assets({ positions, symbols, account, serverTrades, serv
         account={account}
         closedTradesSummary={serverTradesSummary}
         onStart={handleStart}
+        busy={busy}
       />
     );
   }
@@ -305,14 +363,21 @@ function SetupForm({
   account,
   closedTradesSummary,
   onStart,
+  busy,
 }: {
   initial: TraderConfig;
   account: Account | null;
   closedTradesSummary: ClosedTradesSummary | null;
-  onStart: (cfg: TraderConfig) => void;
+  onStart: (cfg: TraderConfig) => void | Promise<void>;
+  busy: boolean;
 }) {
   const [config, setConfig] = useState<TraderConfig>(initial);
   const [saving, setSaving] = useState(false);
+
+  // Keep the form in sync with the latest server-hydrated config.
+  useEffect(() => {
+    setConfig(initial);
+  }, [initial.leverage, initial.takeProfitPercent, initial.walletExposurePercent, initial.emergencyStopPercent, initial.maxOpenPositions, initial.autoCloseEnabled]);
 
   const stats = closedTradesSummary ?? {
     totalTrades: 0,
@@ -327,9 +392,8 @@ function SetupForm({
 
   const handleStart = async () => {
     setSaving(true);
-    await new Promise((r) => setTimeout(r, 400));
+    await onStart(config);
     setSaving(false);
-    onStart(config);
   };
 
   return (
@@ -339,10 +403,11 @@ function SetupForm({
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-yellow-500/10 border border-yellow-500/20 text-yellow-300 text-[10px] uppercase tracking-[0.22em] font-bold mb-3">
             <Bot size={12} /> AI Trader
           </div>
-          <h2 className="text-3xl font-bold text-white tracking-tight">Set up your grid trader</h2>
+          <h2 className="text-3xl font-bold text-white tracking-tight">Set up your Agent Trader</h2>
           <p className="text-sm text-zinc-500 mt-1.5 max-w-xl">
-            Configure leverage, exposure and risk limits. The trader will scan stocks, place grid orders and
-            auto-close winners — realized P&amp;L is added to your wallet.
+            Configure leverage, exposure and risk limits, then start the agent. It will scan stocks,
+            place grid orders, and auto-close winners — realized P&amp;L is added to your wallet so the
+            bot keeps compounding.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -455,15 +520,15 @@ function SetupForm({
 
       <button
         onClick={handleStart}
-        disabled={saving}
+        disabled={saving || busy}
         className="w-full py-4 bg-yellow-500 hover:bg-yellow-400 disabled:opacity-50 rounded-xl font-bold text-black flex items-center justify-center gap-2 transition-colors"
       >
-        {saving ? (
+        {(saving || busy) ? (
           <span className="w-5 h-5 border-2 border-black/20 border-t-black rounded-full animate-spin" />
         ) : (
           <Play size={20} fill="currentColor" />
         )}
-        {saving ? 'Starting…' : 'Start AI Trader'}
+        {(saving || busy) ? 'Starting…' : 'Start Agent Trader'}
       </button>
     </div>
   );

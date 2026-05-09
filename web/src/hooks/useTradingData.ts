@@ -207,7 +207,13 @@ export function useTradingData(user: any) {
           source: trade.source,
           filledAt: trade.filled_at,
         })));
-        setClosedTradesSummary(closedTradesResponse.summary);
+        setClosedTradesSummary(closedTradesResponse.summary ? {
+          totalTrades: Number(closedTradesResponse.summary.total_trades ?? 0),
+          totalRealizedPnl: Number(closedTradesResponse.summary.total_realized_pnl ?? 0),
+          avgPnlPercent: Number(closedTradesResponse.summary.avg_pnl_percent ?? 0),
+          autoClosedCount: Number(closedTradesResponse.summary.auto_closed_count ?? 0),
+          manualClosedCount: Number(closedTradesResponse.summary.manual_closed_count ?? 0),
+        } : null);
       } finally {
         if (!cancelled) {
           setLoading(false);

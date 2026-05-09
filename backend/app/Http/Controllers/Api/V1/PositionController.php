@@ -22,7 +22,7 @@ class PositionController extends Controller
         $marketDataRefreshService->refreshStaleQuotes(1);
         $account = $ensurePaperAccount->handle($user);
 
-        $autoCloseProfitablePositions->handle($account, 2.0);
+        $autoCloseProfitablePositions->handle($account);
 
         $positions = $account->positions()
             ->with(['symbol.latestQuote'])
