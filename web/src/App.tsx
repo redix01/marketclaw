@@ -61,7 +61,7 @@ function DashboardShell({
       case 'settings':
         return <Settings user={user} />;
       default:
-        return <Dashboard account={account} positions={positions} orders={orders} ledger={ledger} agents={agents} dashboard={dashboard} />;
+        return <Dashboard account={account} positions={positions} orders={orders} ledger={ledger} agents={agents} dashboard={dashboard} closedTradesSummary={closedTradesSummary} />;
     }
   };
 

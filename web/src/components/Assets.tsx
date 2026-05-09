@@ -312,6 +312,10 @@ export default function Assets({ positions, symbols, account, serverTrades, serv
   const [selectedType, setSelectedType] = useState<AssetClass | null>(() => loadAssetType());
   const [hydrated, setHydrated] = useState<boolean>(() => !uid || uid === 'guest-user');
   const [busy, setBusy] = useState(false);
+  // inCooldown is transient — NOT persisted to localStorage. Refreshing during cooldown
+  // safely drops back to the SetupForm screen.
+  const [inCooldown, setInCooldown] = useState(false);
+  const [botStartedAt, setBotStartedAt] = useState<string | null>(null);
 
   // Hydrate config + running flag + asset class from the server preferences
   // on mount, so the trader picks up where the user left off across devices.
@@ -351,6 +355,7 @@ export default function Assets({ positions, symbols, account, serverTrades, serv
       setSelectedType(resolvedType);
       persistAssetType(resolvedType);
 
+      setBotStartedAt(prefs.bot_started_at ?? null);
       setRunning(isRunning);
       try {
         window.localStorage.setItem(RUNTIME_STORAGE_KEY, isRunning ? '1' : '0');
@@ -382,11 +387,12 @@ export default function Assets({ positions, symbols, account, serverTrades, serv
     setBusy(true);
     try {
       window.localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(next));
-      window.localStorage.setItem(RUNTIME_STORAGE_KEY, '1');
-      // Reset existing grid simulation so the new config is reflected immediately.
+      // RUNTIME_STORAGE_KEY is set after cooldown completes — not here.
+      // Resetting the grid session ensures fresh state for the new run.
       window.localStorage.removeItem(STORAGE_KEY);
     } catch { /* ignore */ }
 
+    let startedAt = new Date().toISOString();
     if (!isGuest) {
       try {
         await tradingService.updatePreferences(uid, {
@@ -398,13 +404,32 @@ export default function Assets({ positions, symbols, account, serverTrades, serv
           auto_close_enabled: next.autoCloseEnabled,
           bot_asset_type: selectedType,
         });
-        await tradingService.startBot(uid, selectedType);
+        const prefs = await tradingService.startBot(uid, selectedType);
+        startedAt = prefs?.bot_started_at ?? startedAt;
       } catch (err) {
         console.error('Failed to start agent on server:', err);
       }
     }
+    setBotStartedAt(startedAt);
     setBusy(false);
+    setInCooldown(true);
+  };
+
+  const handleCooldownReady = () => {
+    setInCooldown(false);
     setRunning(true);
+    try {
+      window.localStorage.setItem(RUNTIME_STORAGE_KEY, '1');
+    } catch { /* ignore */ }
+  };
+
+  const handleCooldownCancel = async () => {
+    setInCooldown(false);
+    if (!isGuest) {
+      try {
+        await tradingService.stopBot(uid);
+      } catch { /* ignore */ }
+    }
   };
 
   const handleStop = async () => {
@@ -451,9 +476,22 @@ export default function Assets({ positions, symbols, account, serverTrades, serv
         account={account}
         serverTrades={serverTrades}
         serverTradesSummary={serverTradesSummary}
+        botStartedAt={botStartedAt}
         onStop={handleStop}
         onSwitchTrader={handleSwitchTrader}
         busy={busy}
+      />
+    );
+  }
+
+  if (inCooldown && selectedType) {
+    return (
+      <CooldownScreen
+        assetType={selectedType}
+        config={config}
+        symbols={liveSymbols}
+        onReady={handleCooldownReady}
+        onCancel={handleCooldownCancel}
       />
     );
   }
@@ -515,6 +553,213 @@ function AiTraderSkeleton() {
         ))}
       </div>
       <div className="h-16 rounded-2xl bg-zinc-900/30 border border-zinc-800/60" />
+    </div>
+  );
+}
+
+function CooldownScreen({
+  assetType,
+  config,
+  symbols,
+  onReady,
+  onCancel,
+}: {
+  assetType: AssetClass;
+  config: TraderConfig;
+  symbols: SymbolInfo[];
+  onReady: () => void;
+  onCancel: () => void;
+}) {
+  const COOLDOWN = 30;
+  const [left, setLeft] = useState(COOLDOWN);
+  const [scanPhase, setScanPhase] = useState<'scanning' | 'picking' | 'ready'>('scanning');
+  const [scanned, setScanned] = useState<string[]>([]);
+  const [picked, setPicked] = useState<string[]>([]);
+
+  const pool = useMemo(
+    () => symbols.filter((s) => s.type === assetType).map((s) => s.symbol),
+    [symbols, assetType],
+  );
+
+  // Countdown: fire onReady when it hits 0
+  useEffect(() => {
+    if (left <= 0) {
+      onReady();
+      return;
+    }
+    const id = window.setTimeout(() => setLeft((prev) => prev - 1), 1000);
+    return () => window.clearTimeout(id);
+  }, [left, onReady]);
+
+  // Scanning: reveal pool symbols one by one across ~20 seconds, then pick
+  useEffect(() => {
+    if (pool.length === 0) return;
+    let i = 0;
+    const revealMs = Math.min(600, Math.floor(20_000 / pool.length));
+    const id = window.setInterval(() => {
+      if (i < pool.length) {
+        const sym = pool[i];
+        setScanned((prev) => (prev.includes(sym) ? prev : [...prev, sym]));
+        i += 1;
+      } else {
+        window.clearInterval(id);
+        setScanPhase('picking');
+        const picks = [...pool]
+          .sort(() => Math.random() - 0.5)
+          .slice(0, Math.min(config.maxOpenPositions, pool.length));
+        window.setTimeout(() => {
+          setPicked(picks);
+          setScanPhase('ready');
+        }, 1800);
+      }
+    }, revealMs);
+    return () => window.clearInterval(id);
+    // pool changes cause a restart — that's intentional when symbols load late
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pool.join(','), config.maxOpenPositions]);
+
+  const progress = ((COOLDOWN - left) / COOLDOWN) * 100;
+  const circumference = 2 * Math.PI * 15.5; // r=15.5 on viewBox 0 0 36 36
+  const stroke = (progress / 100) * circumference;
+
+  const traderLabel = assetType === 'stock' ? 'Stock AI Trader' : 'Crypto AI Trader';
+  const TraderIcon = assetType === 'stock' ? LineChart : Coins;
+  const iconTone = assetType === 'stock' ? 'text-yellow-300' : 'text-amber-300';
+
+  const phaseLabel =
+    scanPhase === 'scanning'
+      ? 'Scanning markets…'
+      : scanPhase === 'picking'
+        ? 'Selecting positions…'
+        : 'Ready to open positions';
+
+  return (
+    <div className="p-6 space-y-6">
+      <div>
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-yellow-500/10 border border-yellow-500/20 text-yellow-300 text-[10px] uppercase tracking-[0.22em] font-bold mb-3">
+          <TraderIcon size={12} className={iconTone} /> {traderLabel}
+        </div>
+        <h2 className="text-3xl font-bold text-white tracking-tight">Initializing Agent Trader</h2>
+        <p className="text-sm text-zinc-500 mt-1.5 max-w-xl">
+          Scanning {assetType === 'stock' ? 'equity' : 'crypto'} markets and selecting optimal
+          grid positions before trading begins.
+        </p>
+      </div>
+
+      {/* Countdown ring + phase label */}
+      <div className="flex items-center gap-6">
+        <div className="relative w-20 h-20 flex-shrink-0">
+          <svg className="w-20 h-20 -rotate-90" viewBox="0 0 36 36">
+            <circle cx="18" cy="18" r="15.5" fill="none" stroke="#27272a" strokeWidth="3" />
+            <circle
+              cx="18"
+              cy="18"
+              r="15.5"
+              fill="none"
+              stroke="#eab308"
+              strokeWidth="3"
+              strokeDasharray={`${stroke.toFixed(2)} ${circumference.toFixed(2)}`}
+              strokeLinecap="round"
+            />
+          </svg>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className="text-xl font-mono font-bold text-white">{left}</span>
+          </div>
+        </div>
+        <div>
+          <p className="text-white font-bold">{phaseLabel}</p>
+          <p className="text-sm text-zinc-500 mt-1">Trading begins in {left}s</p>
+          <div className="mt-2 w-52 h-1.5 rounded-full bg-zinc-800 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-yellow-500 transition-[width] duration-1000 ease-linear"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Scanning list */}
+        <div className="bg-[#0F0F11] border border-zinc-800/50 rounded-2xl p-5">
+          <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold mb-3">
+            {assetType === 'stock' ? 'Equity' : 'Crypto'} Markets Scanned
+          </p>
+          <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
+            {scanned.map((sym) => {
+              const isPicked = picked.includes(sym);
+              return (
+                <div
+                  key={sym}
+                  className={`flex items-center gap-2 text-xs font-mono ${isPicked ? 'text-yellow-300' : 'text-zinc-400'}`}
+                >
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                      isPicked ? 'bg-yellow-400 animate-pulse' : 'bg-zinc-700'
+                    }`}
+                  />
+                  {sym}
+                  {isPicked && (
+                    <span className="text-[9px] uppercase text-yellow-500 font-bold ml-auto">
+                      selected
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+            {scanned.length === 0 && (
+              <p className="text-xs text-zinc-600 italic">Loading symbols…</p>
+            )}
+          </div>
+        </div>
+
+        {/* Config + selected positions */}
+        <div className="bg-[#0F0F11] border border-zinc-800/50 rounded-2xl p-5 flex flex-col gap-3">
+          <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">
+            Agent Configuration
+          </p>
+          <div className="space-y-2.5">
+            {[
+              ['Asset class', assetType === 'stock' ? 'US Equities' : 'Crypto Pairs'],
+              ['Leverage', `${config.leverage}x`],
+              ['Take profit', `+${config.takeProfitPercent}%`],
+              ['Stop loss', `-${config.emergencyStopPercent}%`],
+              ['Max positions', String(config.maxOpenPositions)],
+              ['Exposure', `${config.walletExposurePercent}%`],
+            ].map(([label, value]) => (
+              <div key={label} className="flex items-center justify-between">
+                <span className="text-xs text-zinc-500">{label}</span>
+                <span className="text-xs font-mono font-bold text-white">{value}</span>
+              </div>
+            ))}
+          </div>
+
+          {scanPhase === 'ready' && picked.length > 0 && (
+            <div className="mt-1 pt-3 border-t border-zinc-800/60">
+              <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold mb-2">
+                Opening positions
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {picked.map((sym) => (
+                  <span
+                    key={sym}
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-yellow-500/15 border border-yellow-500/30 text-yellow-300 text-xs font-bold font-mono"
+                  >
+                    <span className="w-1 h-1 rounded-full bg-yellow-400 animate-pulse" />
+                    {sym}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <button
+        onClick={onCancel}
+        className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+      >
+        Cancel and go back
+      </button>
     </div>
   );
 }
@@ -1076,6 +1321,7 @@ function RunningTrader({
   account,
   serverTrades,
   serverTradesSummary,
+  botStartedAt,
   onStop,
   onSwitchTrader,
   busy,
@@ -1087,11 +1333,23 @@ function RunningTrader({
   account: Account | null;
   serverTrades: ClosedTrade[];
   serverTradesSummary: ClosedTradesSummary | null;
+  botStartedAt?: string | null;
   onStop: () => void | Promise<void>;
   onSwitchTrader: () => void | Promise<void>;
   busy: boolean;
 }) {
   const [tab, setTab] = useState<'detail' | 'history'>('detail');
+
+  // Only surface trades that occurred in the *current* bot session.
+  // Filtering by botStartedAt means a freshly started trader always opens
+  // with an empty trade table, not one pre-populated with old history.
+  const sessionServerTrades = useMemo(() => {
+    if (!botStartedAt) return serverTrades;
+    const since = new Date(botStartedAt).getTime();
+    return serverTrades.filter(
+      (t) => t.filledAt && new Date(t.filledAt).getTime() >= since,
+    );
+  }, [serverTrades, botStartedAt]);
 
   // Restrict the symbol pool to the trader's asset class so a Stock agent
   // never opens crypto grids and vice versa. Fall back to all symbols only
@@ -1311,11 +1569,10 @@ function RunningTrader({
 
   // "Closed trades" must reflect real positions that hit TP or stop loss in
   // the ledger — not the local simulation's grid-close animations. Pull from
-  // serverTrades filtered to this trader's asset class so the sidebar stays
-  // in lockstep with the Grid Orders list below.
+  // sessionServerTrades (current session only) filtered to this asset class.
   const realClosed = useMemo(
-    () => serverTrades.filter((t) => t.assetType === assetType),
-    [serverTrades, assetType]
+    () => sessionServerTrades.filter((t) => t.assetType === assetType),
+    [sessionServerTrades, assetType]
   );
   // Realized P&L for the current trader is the sum of realized P&L on real
   // closed trades for this asset class. This is what the wallet has actually
@@ -1573,7 +1830,7 @@ function RunningTrader({
           </main>
 
           <div className="border-t border-zinc-800/60 col-span-1 lg:col-span-2">
-            <ClosedTradesSection trades={serverTrades} summary={serverTradesSummary} assetType={assetType} />
+            <ClosedTradesSection trades={sessionServerTrades} summary={null} assetType={assetType} />
           </div>
         </div>
       </div>
