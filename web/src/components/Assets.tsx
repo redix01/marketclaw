@@ -50,16 +50,16 @@ interface TraderConfig {
 // Stocks need a higher floor because share prices are bigger and we need
 // at least a couple of slots' worth of margin to deploy.
 const TRADER_MINIMUMS: Record<AssetClass, number> = {
-  stock: 100,
-  crypto: 50,
+  stock: 500,
+  crypto: 200,
 };
 
-// Conservative default win-rate displayed on the cards when the user has
-// no history to draw from yet. Once they have closed trades, the actual
-// rate from their own ledger overrides this.
+// Default win-rate displayed on the cards when the user has no history to
+// draw from yet. Once they have closed trades, the actual rate from their
+// own ledger overrides this.
 const DEFAULT_WIN_RATES: Record<AssetClass, number> = {
-  stock: 64,
-  crypto: 71,
+  stock: 80,
+  crypto: 77,
 };
 
 const COMMISSION_PERCENT = 20;
@@ -840,7 +840,8 @@ function SetupForm({
             min={1}
             max={100}
             step={1}
-            onChange={(v) => setConfig({ ...config, leverage: Math.max(1, Math.round(v)) })}
+            integer
+            onChange={(v) => setConfig({ ...config, leverage: v })}
             suffix="x"
           />
         </FieldCard>
@@ -862,12 +863,13 @@ function SetupForm({
             min={1}
             max={100}
             step={1}
-            onChange={(v) => setConfig({ ...config, walletExposurePercent: Math.max(1, Math.round(v)) })}
+            integer
+            onChange={(v) => setConfig({ ...config, walletExposurePercent: v })}
             suffix="%"
           />
         </FieldCard>
 
-        <FieldCard icon={<ShieldAlert size={16} className="text-yellow-400" />} label="Emergency Stop" hint="Stop all trading at this loss %">
+        <FieldCard icon={<ShieldAlert size={16} className="text-yellow-400" />} label="Stop Loss" hint="Halt all trading once this loss % is hit">
           <NumberInput
             value={config.emergencyStopPercent}
             min={0.1}
@@ -884,7 +886,8 @@ function SetupForm({
             min={1}
             max={20}
             step={1}
-            onChange={(v) => setConfig({ ...config, maxOpenPositions: Math.max(1, Math.round(v)) })}
+            integer
+            onChange={(v) => setConfig({ ...config, maxOpenPositions: v })}
           />
         </FieldCard>
 
@@ -923,7 +926,7 @@ function SetupForm({
               {' '}<span className="font-mono text-yellow-300">+{config.takeProfitPercent}%</span> realized;
               the platform takes <span className="font-mono text-yellow-300">{COMMISSION_PERCENT}%</span> of each
               winning close, the rest auto-credits your wallet.
-              Emergency stop halts trading at <span className="font-mono text-rose-300">-{config.emergencyStopPercent}%</span>.
+              Stop loss halts trading at <span className="font-mono text-rose-300">-{config.emergencyStopPercent}%</span>.
             </p>
           </div>
         </div>
@@ -979,6 +982,7 @@ function NumberInput({
   min,
   max,
   step,
+  integer,
   onChange,
   suffix,
 }: {
@@ -986,20 +990,78 @@ function NumberInput({
   min?: number;
   max?: number;
   step?: number;
+  integer?: boolean;
   onChange: (v: number) => void;
   suffix?: string;
 }) {
+  // Track the raw text the user is typing so they can clear the field, type
+  // multi-digit numbers, and pass through intermediate states like "1." or
+  // empty without the value snapping back to the clamped current value on
+  // every keystroke. Validation + clamping happens on blur / Enter.
+  const [text, setText] = useState<string>(() => String(value));
+  const focusedRef = useRef(false);
+
+  useEffect(() => {
+    // Sync external value into the input when we're not actively editing it,
+    // so server hydration and parent resets still reach the field.
+    if (focusedRef.current) return;
+    if (Number(text) !== value) {
+      setText(String(value));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+
+  const commit = (raw: string) => {
+    const parsed = parseFloat(raw);
+    if (!Number.isFinite(parsed)) {
+      // Empty / invalid → snap back to the last known good value.
+      setText(String(value));
+      return;
+    }
+    let next = parsed;
+    if (integer) next = Math.round(next);
+    if (typeof min === 'number') next = Math.max(min, next);
+    if (typeof max === 'number') next = Math.min(max, next);
+    setText(String(next));
+    if (next !== value) onChange(next);
+  };
+
   return (
     <div className="flex items-center gap-2">
       <input
         type="number"
+        inputMode={integer ? 'numeric' : 'decimal'}
         step={step}
         min={min}
         max={max}
-        value={value}
+        value={text}
+        onFocus={(e) => {
+          focusedRef.current = true;
+          // Select-all on focus so the user can immediately overwrite the
+          // current value — solves the "I want to type 2 but it shows 12"
+          // confusion when the field already had a value like 10.
+          e.currentTarget.select();
+        }}
         onChange={(e) => {
-          const next = parseFloat(e.target.value);
-          onChange(Number.isFinite(next) ? next : 0);
+          const raw = e.target.value;
+          setText(raw);
+          // Stream live changes only when the input parses to a number, so
+          // the plan summary updates as you type but empty / "1." don't
+          // clobber the parent state.
+          const parsed = parseFloat(raw);
+          if (Number.isFinite(parsed) && parsed !== value) {
+            onChange(parsed);
+          }
+        }}
+        onBlur={(e) => {
+          focusedRef.current = false;
+          commit(e.currentTarget.value);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            commit(e.currentTarget.value);
+            e.currentTarget.blur();
+          }
         }}
         className="flex-1 bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white font-mono focus:outline-none focus:border-yellow-500/50"
       />
@@ -1328,7 +1390,7 @@ function RunningTrader({
         <div className="rounded-xl border border-rose-500/30 bg-rose-500/[0.06] p-4 flex items-start gap-3">
           <AlertTriangle size={18} className="text-rose-400 flex-shrink-0 mt-0.5" />
           <div className="text-xs text-rose-200 leading-relaxed">
-            <span className="font-bold">Emergency stop triggered.</span> Session loss exceeded {config.emergencyStopPercent}% of wallet —
+            <span className="font-bold">Stop loss triggered.</span> Session loss exceeded {config.emergencyStopPercent}% of wallet —
             new fills paused. Open positions will not auto-rotate until you reconfigure.
           </div>
         </div>

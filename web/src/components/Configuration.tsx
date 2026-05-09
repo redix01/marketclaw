@@ -127,7 +127,7 @@ export default function Configuration({ account, closedTradesSummary }: Configur
         <div className="bg-[#0F0F11] border border-zinc-800/50 rounded-xl p-5">
           <div className="flex items-center gap-2 mb-3">
             <AlertTriangle size={16} className="text-yellow-400" />
-            <label className="text-sm font-bold text-white">Emergency Stop</label>
+            <label className="text-sm font-bold text-white">Stop Loss</label>
           </div>
           <div className="flex items-center gap-2">
             <input
@@ -185,7 +185,7 @@ export default function Configuration({ account, closedTradesSummary }: Configur
           <div>
             <p className="text-sm font-bold text-yellow-400">Risk Warning</p>
             <p className="text-xs text-zinc-400 mt-1">
-              Grid trading involves significant risk. The emergency stop will halt all trading 
+              Grid trading involves significant risk. The stop loss will halt all trading
               when losses exceed {config.emergencyStopPercent}%. Always monitor your positions.
             </p>
           </div>
