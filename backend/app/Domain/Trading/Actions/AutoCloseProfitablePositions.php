@@ -125,6 +125,8 @@ class AutoCloseProfitablePositions
                     'side' => 'sell',
                     'quantity' => $quantity,
                     'price' => $currentPrice,
+                    'entry_price' => round($entryPrice, 6),
+                    'exit_price' => round($currentPrice, 6),
                     'source' => 'bot',
                     'realized_pnl' => round($realizedPnl, 2),
                     'pnl_percent' => round($pnlPercent, 2),

@@ -64,16 +64,49 @@ class SubmitMarketOrder
                 'filled_at' => now(),
             ]);
 
+            $meta = [
+                'symbol' => $symbol->ticker,
+                'side' => $side,
+                'quantity' => $quantity,
+                'price' => $price,
+                'source' => $source,
+            ];
+
             if ($side === 'buy') {
                 $this->applyBuy($account, $position, $symbol, $quantity, $price, $totalValue);
                 $ledgerType = 'trade_buy';
                 $ledgerAmount = -$totalValue;
                 $description = sprintf('Bought %s %s @ %s', $quantity, $symbol->ticker, $price);
             } else {
+                // Snapshot the entry price + realized P&L *before* mutating the
+                // position so closed-trades reports show real numbers — and so
+                // the user can see the realized P&L that just landed in their
+                // wallet for every manual close, not just bot auto-closes.
+                $entryPrice = (float) $position->average_entry_price;
+                $realizedPnl = ($price - $entryPrice) * $quantity;
+                $pnlPercent = $entryPrice > 0
+                    ? (($price - $entryPrice) / $entryPrice) * 100
+                    : 0.0;
+
                 $this->applySell($account, $position, $quantity, $totalValue);
+
                 $ledgerType = 'trade_sell';
                 $ledgerAmount = $totalValue;
-                $description = sprintf('Sold %s %s @ %s', $quantity, $symbol->ticker, $price);
+                $description = sprintf(
+                    'Sold %s %s @ %s (%s$%s realized, %.2f%%)',
+                    $quantity,
+                    $symbol->ticker,
+                    $price,
+                    $realizedPnl >= 0 ? '+' : '-',
+                    number_format(abs($realizedPnl), 2),
+                    $pnlPercent
+                );
+
+                $meta['entry_price'] = round($entryPrice, 6);
+                $meta['exit_price'] = round($price, 6);
+                $meta['realized_pnl'] = round($realizedPnl, 2);
+                $meta['pnl_percent'] = round($pnlPercent, 2);
+                $meta['auto_closed'] = false;
             }
 
             $account->ledgerEntries()->create([
@@ -83,13 +116,7 @@ class SubmitMarketOrder
                 'description' => $description,
                 'reference_type' => Order::class,
                 'reference_id' => $order->id,
-                'meta' => [
-                    'symbol' => $symbol->ticker,
-                    'side' => $side,
-                    'quantity' => $quantity,
-                    'price' => $price,
-                    'source' => $source,
-                ],
+                'meta' => $meta,
             ]);
 
             return $order->fresh(['symbol']);
