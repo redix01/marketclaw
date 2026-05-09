@@ -649,14 +649,12 @@ function TraderCard({
             </p>
           </div>
         </div>
-        <span className={`inline-flex items-center gap-1.5 text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wider ${
-          stats.isLive
-            ? 'bg-yellow-500/10 border border-yellow-500/30 text-yellow-300'
-            : 'bg-zinc-800/60 border border-zinc-700 text-zinc-400'
-        }`}>
-          <Activity size={10} />
-          {stats.isLive ? `${stats.trades} closed` : 'Backtest'}
-        </span>
+        {stats.isLive && (
+          <span className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wider bg-yellow-500/10 border border-yellow-500/30 text-yellow-300">
+            <Activity size={10} />
+            {stats.trades} closed
+          </span>
+        )}
       </div>
 
       <p className="text-sm text-zinc-400 leading-relaxed">{description}</p>
@@ -1305,9 +1303,17 @@ function RunningTrader({
   const realizedPercent = baseWallet > 0 ? (sessionRealized / baseWallet) * 100 : 0;
   const exposurePercent = wallet > 0 ? clamp((totalMargin / wallet) * 100, 0, 100) : 0;
   const activeCount = enriched.filter((entry) => entry.grid.active).length;
-  const wins = closedTrades.filter((trade) => trade.outcome === 'win').length;
-  const losses = closedTrades.filter((trade) => trade.outcome === 'loss').length;
-  const closedCount = closedTrades.length;
+  // "Closed trades" must reflect real positions that hit TP or stop loss in
+  // the ledger — not the local simulation's grid-close animations. Pull from
+  // serverTrades filtered to this trader's asset class so the sidebar stays
+  // in lockstep with the Grid Orders list below.
+  const realClosed = useMemo(
+    () => serverTrades.filter((t) => t.assetType === assetType),
+    [serverTrades, assetType]
+  );
+  const wins = realClosed.filter((trade) => trade.realizedPnl > 0).length;
+  const losses = realClosed.length - wins;
+  const closedCount = realClosed.length;
   const winRate = closedCount > 0 ? Math.round((wins / closedCount) * 100) : 0;
 
   const sessionDuration = useMemo(() => {
