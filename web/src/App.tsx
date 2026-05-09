@@ -47,7 +47,7 @@ function DashboardShell({
   const renderContent = () => {
     switch (activeTab) {
       case 'overview':
-        return <Dashboard account={account} positions={positions} orders={orders} ledger={ledger} agents={agents} dashboard={dashboard} />;
+        return <Dashboard account={account} positions={positions} orders={orders} ledger={ledger} agents={agents} dashboard={dashboard} closedTradesSummary={closedTradesSummary} />;
       case 'portfolio':
         return <Portfolio account={account} positions={positions} symbols={symbols} />;
       case 'ai-trader':

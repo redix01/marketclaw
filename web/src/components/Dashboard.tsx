@@ -8,7 +8,8 @@ import {
   ArrowUpRight, 
   ArrowDownRight,
   Bot,
-  Wallet
+  Wallet,
+  Repeat
 } from 'lucide-react';
 import { 
   AreaChart, 
@@ -22,7 +23,7 @@ import {
   Pie,
   Cell
 } from 'recharts';
-import { Account, Position, Order, LedgerEvent, Agent, DashboardSnapshot } from '../types';
+import { Account, Position, Order, LedgerEvent, Agent, DashboardSnapshot, ClosedTradesSummary } from '../types';
 
 interface DashboardProps {
   account: Account | null;
@@ -31,6 +32,7 @@ interface DashboardProps {
   ledger: LedgerEvent[];
   agents: Agent[];
   dashboard: DashboardSnapshot | null;
+  closedTradesSummary: ClosedTradesSummary | null;
 }
 
 const StatCard = ({ title, value, subValue, icon: Icon, trend }: any) => (
@@ -39,10 +41,10 @@ const StatCard = ({ title, value, subValue, icon: Icon, trend }: any) => (
       <div className="p-2.5 bg-zinc-900 rounded-xl group-hover:bg-yellow-500/10 group-hover:text-yellow-400 transition-colors">
         <Icon size={20} />
       </div>
-      {trend && (
-        <div className={`flex items-center gap-1 text-xs font-bold ${trend > 0 ? 'text-yellow-400' : 'text-rose-400'}`}>
-          {trend > 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
-          {Math.abs(trend)}%
+      {typeof trend === 'number' && Number.isFinite(trend) && (
+        <div className={`flex items-center gap-1 text-xs font-bold ${trend >= 0 ? 'text-yellow-400' : 'text-rose-400'}`}>
+          {trend >= 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
+          {Math.abs(trend).toFixed(2)}%
         </div>
       )}
     </div>
@@ -52,7 +54,7 @@ const StatCard = ({ title, value, subValue, icon: Icon, trend }: any) => (
   </div>
 );
 
-export default function Dashboard({ account, positions, orders, ledger, agents, dashboard }: DashboardProps) {
+export default function Dashboard({ account, positions, orders, ledger, agents, dashboard, closedTradesSummary }: DashboardProps) {
   const [range, setRange] = useState<'1D' | '1W' | '1M' | 'ALL'>('1W');
 
   const holdingsValue = dashboard?.summary.holdingsValue
@@ -60,6 +62,33 @@ export default function Dashboard({ account, positions, orders, ledger, agents, 
   const totalEquity = dashboard?.summary.totalEquity ?? ((account?.cashBalance || 0) + holdingsValue);
   const unrealizedPL = dashboard?.summary.unrealizedPL
     ?? positions.reduce((acc, pos) => acc + (pos.unrealizedPL ?? ((pos.currentPrice ?? pos.averageEntryPrice) - pos.averageEntryPrice) * pos.quantity), 0);
+
+  // Real trends derived from backend data — no more hardcoded 2.4 / 5.2.
+  // Total-equity trend compares the latest equity_curve point against the
+  // earliest one in view; if there's only one data point we omit the trend
+  // chip entirely instead of inventing one.
+  const equityTrend = useMemo(() => {
+    const points = dashboard?.equityCurve ?? [];
+    if (points.length < 2) return null;
+    const first = points[0]?.value ?? 0;
+    const last = points[points.length - 1]?.value ?? 0;
+    if (first <= 0) return null;
+    return Number((((last - first) / first) * 100).toFixed(2));
+  }, [dashboard?.equityCurve]);
+
+  // Unrealized P&L trend = unrealized P&L expressed as % of total cost basis.
+  // Same number every other holdings table shows in row form.
+  const unrealizedTrend = useMemo(() => {
+    const costBasis = positions.reduce(
+      (acc, pos) => acc + pos.quantity * pos.averageEntryPrice,
+      0,
+    );
+    if (costBasis <= 0) return null;
+    return Number(((unrealizedPL / costBasis) * 100).toFixed(2));
+  }, [positions, unrealizedPL]);
+
+  const realizedPnl = closedTradesSummary?.totalRealizedPnl ?? 0;
+  const closedTradesCount = closedTradesSummary?.totalTrades ?? 0;
 
   const chartData = useMemo(() => {
     const points = dashboard?.equityCurve ?? [];
@@ -98,31 +127,31 @@ export default function Dashboard({ account, positions, orders, ledger, agents, 
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard 
-          title="Total Equity" 
-          value={`$${totalEquity.toLocaleString(undefined, { minimumFractionDigits: 2 })}`} 
+        <StatCard
+          title="Total Equity"
+          value={`$${totalEquity.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
           subValue="Combined cash & holdings"
           icon={DollarSign}
-          trend={2.4}
+          trend={equityTrend}
         />
-        <StatCard 
-          title="Cash Balance" 
-          value={`$${(account?.cashBalance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`} 
+        <StatCard
+          title="Cash Balance"
+          value={`$${(account?.cashBalance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
           subValue="Available buying power"
           icon={Wallet}
         />
-        <StatCard 
-          title="Unrealized P/L" 
-          value={`$${unrealizedPL.toLocaleString(undefined, { minimumFractionDigits: 2 })}`} 
+        <StatCard
+          title="Unrealized P/L"
+          value={`${unrealizedPL >= 0 ? '+' : '-'}$${Math.abs(unrealizedPL).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
           subValue="Current open profit/loss"
           icon={Activity}
-          trend={unrealizedPL >= 0 ? 5.2 : -2.1}
+          trend={unrealizedTrend}
         />
-        <StatCard 
-          title="Active Bots" 
-          value={agents.filter(a => a.status === 'running').length} 
-          subValue="Bots currently trading"
-          icon={Bot}
+        <StatCard
+          title="Realized P/L"
+          value={`${realizedPnl >= 0 ? '+' : '-'}$${Math.abs(realizedPnl).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+          subValue={`${closedTradesCount} closed ${closedTradesCount === 1 ? 'trade' : 'trades'}`}
+          icon={Repeat}
         />
       </div>
 
