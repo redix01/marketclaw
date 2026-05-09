@@ -1,5 +1,21 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronRight, Minus, TrendingUp, TrendingDown, Bot, MousePointerClick, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import {
+  ChevronRight,
+  Minus,
+  Bot,
+  MousePointerClick,
+  ArrowUpRight,
+  ArrowDownRight,
+  Save,
+  AlertTriangle,
+  TrendingUp,
+  Wallet as WalletIcon,
+  Zap,
+  Play,
+  Square,
+  Sliders,
+  ShieldAlert,
+} from 'lucide-react';
 import { MOCK_SYMBOLS } from '../constants';
 import { Account, ClosedTrade, ClosedTradesSummary, Position, SymbolInfo } from '../types';
 
@@ -10,6 +26,48 @@ interface AssetsProps {
   account: Account | null;
   serverTrades: ClosedTrade[];
   serverTradesSummary: ClosedTradesSummary | null;
+}
+
+interface TraderConfig {
+  leverage: number;
+  takeProfitPercent: number;
+  walletExposurePercent: number;
+  emergencyStopPercent: number;
+  maxOpenPositions: number;
+  autoCloseEnabled: boolean;
+}
+
+const DEFAULT_CONFIG: TraderConfig = {
+  leverage: 10,
+  takeProfitPercent: 2.0,
+  walletExposurePercent: 25,
+  emergencyStopPercent: 5,
+  maxOpenPositions: 5,
+  autoCloseEnabled: true,
+};
+
+const CONFIG_STORAGE_KEY = 'marketclaw:trader-config:v1';
+const RUNTIME_STORAGE_KEY = 'marketclaw:trader-running:v1';
+
+function loadStoredConfig(): TraderConfig | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(CONFIG_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return { ...DEFAULT_CONFIG, ...parsed };
+  } catch {
+    return null;
+  }
+}
+
+function loadRunning(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.localStorage.getItem(RUNTIME_STORAGE_KEY) === '1';
+  } catch {
+    return false;
+  }
 }
 
 interface GridConfig {
@@ -33,7 +91,7 @@ interface GridConfig {
   active: boolean;
 }
 
-interface ClosedTrade {
+interface LocalClosedTrade {
   id: string;
   symbol: string;
   pnl: number;
@@ -90,12 +148,12 @@ function nextGridId(symbol: string) {
   return `${symbol}-${gridIdCounter}`;
 }
 
-const STORAGE_KEY = 'marketclaw:grid-session:v1';
+const STORAGE_KEY = 'marketclaw:grid-session:v2';
 
 interface PersistedSession {
   sessionStart: number;
   grids: GridConfig[];
-  closedTrades: ClosedTrade[];
+  closedTrades: LocalClosedTrade[];
   sessionRealized: number;
   selectedSymbol: string;
   gridIdCounter: number;
@@ -123,15 +181,28 @@ function savePersisted(state: PersistedSession) {
   }
 }
 
-function buildGrid(symbol: SymbolInfo, index: number, openedAt: number): GridConfig {
+function buildGrid(
+  symbol: SymbolInfo,
+  index: number,
+  openedAt: number,
+  cfg: TraderConfig,
+  walletBalance: number
+): GridConfig {
   const seed = symbolSeed(symbol.symbol) + Math.floor(Math.random() * 97);
   const totalLevels = clamp(10 + ((seed + index) % 18), 10, 28);
   const filledLevels = (seed + index * 3) % (totalLevels + 1);
-  const margin = clamp(8 + (seed % 11) + index * 0.4, 8, 50);
+
+  // Distribute wallet exposure across the configured number of positions.
+  const slots = Math.max(cfg.maxOpenPositions, 1);
+  const targetExposurePerSlot = cfg.walletExposurePercent / slots;
+  const margin = clamp((walletBalance * targetExposurePerSlot) / 100, 1, walletBalance);
+
   const rangePercent = clamp(2 + ((seed % 13) * 0.6), 1.8, 9.5);
   const baseUnrealized = ((seed % 7) - 3) * 0.012;
-  const closeThreshold = 0.02 + ((seed % 11) / 1000);
-  const stopThreshold = -(0.02 + ((seed % 9) / 1000));
+
+  // Use the user-configured TP / emergency stop directly.
+  const closeThreshold = cfg.takeProfitPercent / 100;
+  const stopThreshold = -(cfg.emergencyStopPercent / 100);
 
   return {
     id: nextGridId(symbol.symbol),
@@ -140,9 +211,9 @@ function buildGrid(symbol: SymbolInfo, index: number, openedAt: number): GridCon
     type: symbol.type,
     basePrice: symbol.price,
     baseChangePercent: symbol.changePercent,
-    leverage: 10,
+    leverage: cfg.leverage,
     margin,
-    exposurePercent: clamp((margin / 192) * 100, 0.6, 28),
+    exposurePercent: targetExposurePerSlot,
     rangePercent,
     totalLevels,
     filledLevels,
@@ -178,30 +249,332 @@ function tickGrid(config: GridConfig, prevTick: GridTick | undefined, nowMs: num
 }
 
 export default function Assets({ positions, symbols, account, serverTrades, serverTradesSummary }: AssetsProps) {
-  const [tab, setTab] = useState<'detail' | 'history'>('detail');
   const liveSymbols = symbols.length > 0 ? symbols : MOCK_SYMBOLS;
+
+  const [config, setConfig] = useState<TraderConfig>(() => loadStoredConfig() ?? DEFAULT_CONFIG);
+  const [running, setRunning] = useState<boolean>(() => loadRunning() && loadStoredConfig() !== null);
+
+  const handleStart = (next: TraderConfig) => {
+    setConfig(next);
+    try {
+      window.localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(next));
+      window.localStorage.setItem(RUNTIME_STORAGE_KEY, '1');
+      // Reset existing grid session so the new config is reflected immediately.
+      window.localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      /* ignore */
+    }
+    setRunning(true);
+  };
+
+  const handleStop = () => {
+    try {
+      window.localStorage.setItem(RUNTIME_STORAGE_KEY, '0');
+    } catch {
+      /* ignore */
+    }
+    setRunning(false);
+  };
+
+  if (!running) {
+    return (
+      <SetupForm
+        initial={config}
+        account={account}
+        closedTradesSummary={serverTradesSummary}
+        onStart={handleStart}
+      />
+    );
+  }
+
+  return (
+    <RunningTrader
+      config={config}
+      liveSymbols={liveSymbols}
+      positions={positions}
+      account={account}
+      serverTrades={serverTrades}
+      serverTradesSummary={serverTradesSummary}
+      onStop={handleStop}
+    />
+  );
+}
+
+function SetupForm({
+  initial,
+  account,
+  closedTradesSummary,
+  onStart,
+}: {
+  initial: TraderConfig;
+  account: Account | null;
+  closedTradesSummary: ClosedTradesSummary | null;
+  onStart: (cfg: TraderConfig) => void;
+}) {
+  const [config, setConfig] = useState<TraderConfig>(initial);
+  const [saving, setSaving] = useState(false);
+
+  const stats = closedTradesSummary ?? {
+    totalTrades: 0,
+    totalRealizedPnl: 0,
+    avgPnlPercent: 0,
+    autoClosedCount: 0,
+    manualClosedCount: 0,
+  };
+
+  const wallet = account?.cashBalance ?? 0;
+  const capitalAtRisk = (wallet * config.walletExposurePercent) / 100;
+
+  const handleStart = async () => {
+    setSaving(true);
+    await new Promise((r) => setTimeout(r, 400));
+    setSaving(false);
+    onStart(config);
+  };
+
+  return (
+    <div className="p-6 space-y-6">
+      <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+        <div>
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-yellow-500/10 border border-yellow-500/20 text-yellow-300 text-[10px] uppercase tracking-[0.22em] font-bold mb-3">
+            <Bot size={12} /> AI Trader
+          </div>
+          <h2 className="text-3xl font-bold text-white tracking-tight">Set up your grid trader</h2>
+          <p className="text-sm text-zinc-500 mt-1.5 max-w-xl">
+            Configure leverage, exposure and risk limits. The trader will scan stocks, place grid orders and
+            auto-close winners — realized P&amp;L is added to your wallet.
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="px-4 py-3 rounded-xl border border-zinc-800/70 bg-[#0F0F11] min-w-[140px]">
+            <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Wallet</p>
+            <p className="mt-1 text-xl font-mono font-bold text-white">{formatMoney(wallet)}</p>
+          </div>
+          <div className="px-4 py-3 rounded-xl border border-zinc-800/70 bg-[#0F0F11] min-w-[140px]">
+            <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Realized P&amp;L</p>
+            <p className={`mt-1 text-xl font-mono font-bold ${stats.totalRealizedPnl >= 0 ? 'text-yellow-400' : 'text-rose-400'}`}>
+              {stats.totalRealizedPnl >= 0 ? '+' : '-'}${Math.abs(stats.totalRealizedPnl).toFixed(2)}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <FieldCard icon={<Zap size={16} className="text-yellow-400" />} label="Leverage" hint="Position multiplier for grid trading">
+          <NumberInput
+            value={config.leverage}
+            min={1}
+            max={100}
+            step={1}
+            onChange={(v) => setConfig({ ...config, leverage: Math.max(1, Math.round(v)) })}
+            suffix="x"
+          />
+        </FieldCard>
+
+        <FieldCard icon={<TrendingUp size={16} className="text-yellow-400" />} label="Take Profit" hint="Auto-close when profit reaches this %">
+          <NumberInput
+            value={config.takeProfitPercent}
+            min={0.1}
+            max={50}
+            step={0.1}
+            onChange={(v) => setConfig({ ...config, takeProfitPercent: v })}
+            suffix="%"
+          />
+        </FieldCard>
+
+        <FieldCard icon={<WalletIcon size={16} className="text-yellow-400" />} label="Wallet Exposure" hint="Max capital to use across all positions">
+          <NumberInput
+            value={config.walletExposurePercent}
+            min={1}
+            max={100}
+            step={1}
+            onChange={(v) => setConfig({ ...config, walletExposurePercent: Math.max(1, Math.round(v)) })}
+            suffix="%"
+          />
+        </FieldCard>
+
+        <FieldCard icon={<ShieldAlert size={16} className="text-yellow-400" />} label="Emergency Stop" hint="Stop all trading at this loss %">
+          <NumberInput
+            value={config.emergencyStopPercent}
+            min={0.1}
+            max={50}
+            step={0.1}
+            onChange={(v) => setConfig({ ...config, emergencyStopPercent: v })}
+            suffix="%"
+          />
+        </FieldCard>
+
+        <FieldCard icon={<Sliders size={16} className="text-yellow-400" />} label="Max Open Positions" hint="Simultaneous grid positions">
+          <NumberInput
+            value={config.maxOpenPositions}
+            min={1}
+            max={20}
+            step={1}
+            onChange={(v) => setConfig({ ...config, maxOpenPositions: Math.max(1, Math.round(v)) })}
+          />
+        </FieldCard>
+
+        <div className="bg-[#0F0F11] border border-zinc-800/50 rounded-xl p-5 flex items-center justify-between">
+          <div>
+            <label className="text-sm font-bold text-white">Auto-Close</label>
+            <p className="text-[10px] text-zinc-500 mt-1">
+              Auto-close at +{config.takeProfitPercent}% / halt at -{config.emergencyStopPercent}%
+            </p>
+          </div>
+          <button
+            onClick={() => setConfig({ ...config, autoCloseEnabled: !config.autoCloseEnabled })}
+            className={`w-14 h-7 rounded-full transition-all flex-shrink-0 ${
+              config.autoCloseEnabled ? 'bg-yellow-500' : 'bg-zinc-700'
+            }`}
+            aria-pressed={config.autoCloseEnabled}
+          >
+            <div
+              className={`w-6 h-6 rounded-full bg-white shadow transform transition-transform ${
+                config.autoCloseEnabled ? 'translate-x-7' : 'translate-x-0.5'
+              }`}
+            />
+          </button>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-yellow-500/20 bg-yellow-500/[0.04] p-5">
+        <div className="flex items-start gap-3">
+          <AlertTriangle size={20} className="text-yellow-400 flex-shrink-0 mt-0.5" />
+          <div className="space-y-2">
+            <p className="text-sm font-bold text-yellow-400">Plan summary</p>
+            <p className="text-xs text-zinc-300 leading-relaxed">
+              Allocate up to <span className="font-mono text-yellow-300">{formatMoney(capitalAtRisk)}</span>
+              {' '}({config.walletExposurePercent}% of wallet) across <span className="font-mono text-yellow-300">{config.maxOpenPositions}</span> grid positions
+              at <span className="font-mono text-yellow-300">{config.leverage}x</span> leverage. Auto-close fires at
+              {' '}<span className="font-mono text-yellow-300">+{config.takeProfitPercent}%</span> realized.
+              Emergency stop halts all trading at <span className="font-mono text-rose-300">-{config.emergencyStopPercent}%</span>.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <button
+        onClick={handleStart}
+        disabled={saving}
+        className="w-full py-4 bg-yellow-500 hover:bg-yellow-400 disabled:opacity-50 rounded-xl font-bold text-black flex items-center justify-center gap-2 transition-colors"
+      >
+        {saving ? (
+          <span className="w-5 h-5 border-2 border-black/20 border-t-black rounded-full animate-spin" />
+        ) : (
+          <Play size={20} fill="currentColor" />
+        )}
+        {saving ? 'Starting…' : 'Start AI Trader'}
+      </button>
+    </div>
+  );
+}
+
+function FieldCard({
+  icon,
+  label,
+  hint,
+  children,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  hint: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="bg-[#0F0F11] border border-zinc-800/50 rounded-xl p-5">
+      <div className="flex items-center gap-2 mb-3">
+        {icon}
+        <label className="text-sm font-bold text-white">{label}</label>
+      </div>
+      {children}
+      <p className="text-[10px] text-zinc-500 mt-2">{hint}</p>
+    </div>
+  );
+}
+
+function NumberInput({
+  value,
+  min,
+  max,
+  step,
+  onChange,
+  suffix,
+}: {
+  value: number;
+  min?: number;
+  max?: number;
+  step?: number;
+  onChange: (v: number) => void;
+  suffix?: string;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        type="number"
+        step={step}
+        min={min}
+        max={max}
+        value={value}
+        onChange={(e) => {
+          const next = parseFloat(e.target.value);
+          onChange(Number.isFinite(next) ? next : 0);
+        }}
+        className="flex-1 bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white font-mono focus:outline-none focus:border-yellow-500/50"
+      />
+      {suffix && <span className="text-zinc-500 text-sm">{suffix}</span>}
+    </div>
+  );
+}
+
+function RunningTrader({
+  config,
+  liveSymbols,
+  positions,
+  account,
+  serverTrades,
+  serverTradesSummary,
+  onStop,
+}: {
+  config: TraderConfig;
+  liveSymbols: SymbolInfo[];
+  positions: Position[];
+  account: Account | null;
+  serverTrades: ClosedTrade[];
+  serverTradesSummary: ClosedTradesSummary | null;
+  onStop: () => void;
+}) {
+  const [tab, setTab] = useState<'detail' | 'history'>('detail');
 
   const liveSymbolsRef = useRef(liveSymbols);
   liveSymbolsRef.current = liveSymbols;
+  const configRef = useRef(config);
+  configRef.current = config;
+
+  const baseWallet = account?.cashBalance ?? 192.23;
+  const baseWalletRef = useRef(baseWallet);
+  baseWalletRef.current = baseWallet;
 
   const persistedRef = useRef<PersistedSession | null>(loadPersisted());
 
   const sessionStartRef = useRef<number>(persistedRef.current?.sessionStart ?? Date.now());
+
   const [grids, setGrids] = useState<GridConfig[]>(() => {
     if (persistedRef.current?.grids?.length) {
       const maxId = persistedRef.current.gridIdCounter ?? 0;
       gridIdCounter = Math.max(gridIdCounter, maxId);
       return persistedRef.current.grids;
     }
-    return liveSymbols.map((symbol, index) => buildGrid(symbol, index, Date.now()));
+    const slots = Math.min(config.maxOpenPositions, liveSymbols.length);
+    return liveSymbols.slice(0, slots).map((symbol, index) => buildGrid(symbol, index, Date.now(), config, baseWallet));
   });
-  const [closedTrades, setClosedTrades] = useState<ClosedTrade[]>(
+  const [closedTrades, setClosedTrades] = useState<LocalClosedTrade[]>(
     () => persistedRef.current?.closedTrades ?? []
   );
   const [sessionRealized, setSessionRealized] = useState(
     () => persistedRef.current?.sessionRealized ?? 0
   );
   const [now, setNow] = useState(Date.now());
+  const [emergencyHalted, setEmergencyHalted] = useState(false);
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 1000);
@@ -216,6 +589,10 @@ export default function Assets({ positions, symbols, account, serverTrades, serv
   ticksRef.current = ticks;
   const gridsRef = useRef(grids);
   gridsRef.current = grids;
+  const sessionRealizedRef = useRef(sessionRealized);
+  sessionRealizedRef.current = sessionRealized;
+  const haltedRef = useRef(emergencyHalted);
+  haltedRef.current = emergencyHalted;
 
   useEffect(() => {
     if (!grids.some((grid) => grid.symbol === selectedSymbol)) {
@@ -231,8 +608,10 @@ export default function Assets({ positions, symbols, account, serverTrades, serv
       if (nowMs - last >= 750) {
         last = nowMs;
         const currentGrids = gridsRef.current;
+        const cfg = configRef.current;
+        const halted = haltedRef.current;
         const nextTicks: Record<string, GridTick> = {};
-        const closedThisRound: ClosedTrade[] = [];
+        const closedThisRound: LocalClosedTrade[] = [];
         let realizedDelta = 0;
 
         const replacements: { index: number; grid: GridConfig }[] = [];
@@ -243,9 +622,13 @@ export default function Assets({ positions, symbols, account, serverTrades, serv
           const pnlPct = grid.margin > 0 ? tick.unrealizedPnL / grid.margin : 0;
 
           const ageMs = Date.now() - grid.openedAt;
-          const eligible = ageMs > 4000;
+          const eligible = ageMs > 4000 && !halted;
 
-          if (eligible && (pnlPct >= grid.closeThreshold || pnlPct <= grid.stopThreshold)) {
+          // Auto-close on take profit (if enabled) or emergency stop loss.
+          const hitTP = cfg.autoCloseEnabled && pnlPct >= grid.closeThreshold;
+          const hitStop = pnlPct <= grid.stopThreshold;
+
+          if (eligible && (hitTP || hitStop)) {
             const outcome: 'win' | 'loss' = pnlPct >= 0 ? 'win' : 'loss';
             closedThisRound.push({
               id: grid.id,
@@ -256,11 +639,13 @@ export default function Assets({ positions, symbols, account, serverTrades, serv
             });
             realizedDelta += tick.unrealizedPnL;
 
+            // Replace the closed grid with a fresh one — keep the rotation alive
+            // so the trader continues compounding realized P&L into the wallet.
             const pool = liveSymbolsRef.current;
             const activeSymbols = new Set(currentGrids.map((g, idx) => (idx === i ? null : g.symbol)).filter(Boolean) as string[]);
             const candidates = pool.filter((entry) => !activeSymbols.has(entry.symbol));
             const fresh = (candidates.length > 0 ? candidates : pool)[Math.floor(Math.random() * (candidates.length || pool.length))];
-            const newGrid = buildGrid(fresh, i, Date.now());
+            const newGrid = buildGrid(fresh, i, Date.now(), cfg, baseWalletRef.current + sessionRealizedRef.current + realizedDelta);
             replacements.push({ index: i, grid: newGrid });
             nextTicks[newGrid.id] = {
               price: newGrid.basePrice,
@@ -286,7 +671,17 @@ export default function Assets({ positions, symbols, account, serverTrades, serv
 
         if (closedThisRound.length > 0) {
           setClosedTrades((prev) => [...closedThisRound, ...prev].slice(0, 200));
-          setSessionRealized((prev) => prev + realizedDelta);
+          setSessionRealized((prev) => {
+            const next = prev + realizedDelta;
+            // Emergency stop: halt trading once total session loss
+            // exceeds the user-configured loss threshold of base wallet.
+            const lossPct = baseWalletRef.current > 0 ? (next / baseWalletRef.current) * 100 : 0;
+            if (lossPct <= -cfg.emergencyStopPercent && !haltedRef.current) {
+              haltedRef.current = true;
+              setEmergencyHalted(true);
+            }
+            return next;
+          });
         }
       }
       frame = window.requestAnimationFrame(loop);
@@ -340,12 +735,9 @@ export default function Assets({ positions, symbols, account, serverTrades, serv
 
   const selected = enriched.find((entry) => entry.grid.symbol === selectedSymbol) ?? enriched[0];
 
-  const baseWallet = account?.cashBalance ?? 192.23;
   const wallet = baseWallet + sessionRealized;
   const totalMargin = enriched.reduce((sum, entry) => sum + entry.grid.margin, 0);
   const totalUnrealized = enriched.reduce((sum, entry) => sum + entry.unrealizedPnL, 0);
-  const totalPnL = sessionRealized + totalUnrealized;
-  const pnlPercent = baseWallet > 0 ? (totalPnL / baseWallet) * 100 : 0;
   const realizedPercent = baseWallet > 0 ? (sessionRealized / baseWallet) * 100 : 0;
   const exposurePercent = wallet > 0 ? clamp((totalMargin / wallet) * 100, 0, 100) : 0;
   const activeCount = enriched.filter((entry) => entry.grid.active).length;
@@ -374,7 +766,7 @@ export default function Assets({ positions, symbols, account, serverTrades, serv
   const historyRows = useMemo(() => {
     if (!selected) return [] as { id: string; time: string; side: 'Buy' | 'Sell'; price: number; size: number; pnl: number }[];
     const seed = symbolSeed(selected.grid.symbol);
-    const now = Date.now();
+    const nowMs = Date.now();
     const rangeStep = (selected.grid.basePrice * selected.grid.rangePercent) / 100 / Math.max(selected.grid.totalLevels, 1);
 
     return Array.from({ length: 8 }, (_, index) => {
@@ -382,7 +774,7 @@ export default function Assets({ positions, symbols, account, serverTrades, serv
       const offset = (index - 3) * rangeStep;
       return {
         id: `${selected.grid.symbol}-${index}`,
-        time: new Date(now - (index * 6 + (seed % 7)) * 60_000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        time: new Date(nowMs - (index * 6 + (seed % 7)) * 60_000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         side: (buy ? 'Buy' : 'Sell') as 'Buy' | 'Sell',
         price: selected.grid.basePrice + offset,
         size: clamp(0.4 + ((seed + index) % 6) * 0.18, 0.4, 1.6),
@@ -392,163 +784,197 @@ export default function Assets({ positions, symbols, account, serverTrades, serv
   }, [selected]);
 
   return (
-    <div className="bg-[#0A0A0B] border border-zinc-800/50 rounded-3xl overflow-hidden">
-      <div className="grid grid-cols-1 lg:grid-cols-[340px_1fr]">
-        <aside className="border-b lg:border-b-0 lg:border-r border-zinc-800/60 flex flex-col">
-          <div className="p-5 border-b border-zinc-800/60">
-            <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500 font-bold mb-4">Trading Stats</p>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold">Wallet</p>
-                <p className="mt-1 text-2xl font-mono text-white">{formatMoney(wallet)}</p>
-                <p className="mt-1 text-[10px] text-yellow-300/80 font-bold">{exposurePercent.toFixed(1)}% exposed</p>
-              </div>
-              <div>
-                <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold">PNL (Realized)</p>
-                <p className={`mt-1 text-2xl font-mono ${sessionRealized >= 0 ? 'text-yellow-400' : 'text-rose-400'}`}>
-                  {formatSignedMoney(sessionRealized, 2)}
-                </p>
-                <p className={`mt-1 text-[10px] font-bold ${sessionRealized >= 0 ? 'text-yellow-400/80' : 'text-rose-400/80'}`}>
-                  {realizedPercent >= 0 ? '+' : ''}{realizedPercent.toFixed(2)}%
-                </p>
-              </div>
-              <div className="col-span-2 grid grid-cols-2 gap-2 mt-1">
-                <div className="rounded-md bg-yellow-500/10 border border-yellow-500/20 px-2 py-1">
-                  <p className="text-[9px] uppercase tracking-wider text-yellow-400/80 font-bold">R</p>
-                  <p className="text-xs font-mono text-yellow-300">{formatSignedMoney(sessionRealized, 2)}</p>
-                </div>
-                <div className="rounded-md bg-rose-500/10 border border-rose-500/20 px-2 py-1">
-                  <p className="text-[9px] uppercase tracking-wider text-rose-400/80 font-bold">U</p>
-                  <p className="text-xs font-mono text-rose-300">{formatSignedMoney(totalUnrealized, 2)}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 mt-5 pt-4 border-t border-zinc-800/60">
-              <div>
-                <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold">Closed</p>
-                <p className="mt-1 text-xl font-mono text-white">{closedCount.toLocaleString()}</p>
-                <p className="mt-1 text-[10px] text-zinc-500">{wins}W / {losses}L</p>
-              </div>
-              <div>
-                <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold">Active</p>
-                <p className="mt-1 text-xl font-mono text-white">{sessionDuration}</p>
-                <p className="mt-1 text-[10px] text-yellow-400/80 font-bold">{winRate}% win</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="px-5 pt-4 pb-2 flex items-center justify-between">
-            <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500 font-bold">Active Grids</p>
-            <span className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded-full bg-yellow-500/15 text-yellow-300 text-[10px] font-bold border border-yellow-500/25">
-              {activeCount}
+    <div className="space-y-4">
+      {/* Header — running state */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 px-1">
+        <div className="flex items-center gap-3">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-yellow-500/10 border border-yellow-500/25">
+            <span className={`w-1.5 h-1.5 rounded-full ${emergencyHalted ? 'bg-rose-400' : 'bg-yellow-400 animate-pulse'}`} />
+            <span className={`text-[10px] uppercase tracking-[0.22em] font-bold ${emergencyHalted ? 'text-rose-300' : 'text-yellow-300'}`}>
+              {emergencyHalted ? 'Halted' : 'Live'}
             </span>
           </div>
-
-          <div className="flex-1 overflow-y-auto max-h-[640px] px-2 pb-3 space-y-1">
-            {enriched.map((entry) => {
-              const { grid } = entry;
-              const isSelected = grid.symbol === selectedSymbol;
-              const fillRatio = grid.totalLevels > 0 ? entry.filledLevels / grid.totalLevels : 0;
-              const pnl = entry.unrealizedPnL;
-              const positive = pnl >= 0;
-
-              const ageSec = Math.max(0, Math.floor((now - grid.openedAt) / 1000));
-              const ageLabel = ageSec >= 60 ? `${Math.floor(ageSec / 60)}m` : `${ageSec}s`;
-
-              return (
-                <button
-                  key={grid.id}
-                  onClick={() => setSelectedSymbol(grid.symbol)}
-                  className={`w-full text-left px-3 py-3 rounded-lg border transition-colors flex flex-col gap-2 ${
-                    isSelected
-                      ? 'bg-yellow-500/[0.06] border-yellow-400/40'
-                      : 'bg-transparent border-transparent hover:bg-zinc-900/50 hover:border-zinc-800'
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <Minus size={12} className={isSelected ? 'text-yellow-300' : 'text-zinc-600'} />
-                      <span className="font-bold text-white text-sm truncate">{grid.symbol}</span>
-                    </div>
-                    <span className={`font-mono text-xs ${positive ? 'text-yellow-400' : 'text-rose-400'}`}>
-                      {formatSignedMoney(pnl, 4)}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-between text-[10px] text-zinc-500 -mt-1 ml-5">
-                    <span>{grid.symbol}/USDT · <span className="font-mono text-zinc-400">{formatPrice(entry.price)}</span></span>
-                    {isSelected && <ChevronRight size={12} className="text-yellow-300" />}
-                  </div>
-
-                  <div className="flex items-center justify-between text-[10px] ml-5">
-                    <span className="text-zinc-500">
-                      <span className="text-zinc-300 font-bold">{grid.leverage}x</span>
-                      <span className="mx-1.5 text-zinc-700">·</span>
-                      <span className="font-mono">${grid.margin.toFixed(2)}</span>
-                      <span className="mx-1.5 text-zinc-700">·</span>
-                      <span>{ageLabel}</span>
-                      <span className="mx-1.5 text-zinc-700">·</span>
-                      <span className="text-yellow-300 font-bold">{grid.exposurePercent.toFixed(1)}%</span>
-                    </span>
-                  </div>
-
-                  <div className="ml-5 mr-1">
-                    <div className="h-[3px] rounded-full bg-zinc-800 overflow-hidden">
-                      <div
-                        className="h-full rounded-full bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-300 transition-[width] duration-700 ease-out"
-                        style={{ width: `${fillRatio * 100}%` }}
-                      />
-                    </div>
-                    <div className="flex items-center justify-between mt-1 text-[10px] font-mono">
-                      <span className="text-zinc-600">{formatPrice(grid.basePrice * (1 - grid.rangePercent / 100))}</span>
-                      <span className="text-zinc-500">{entry.filledLevels}/{grid.totalLevels}</span>
-                      <span className="text-zinc-600">{formatPrice(grid.basePrice * (1 + grid.rangePercent / 100))}</span>
-                    </div>
-                  </div>
-
-                  <div className="ml-5 flex items-center gap-3 text-[10px] font-mono">
-                    <span className="text-zinc-500">R: <span className={entry.realizedPnL >= 0 ? 'text-yellow-400' : 'text-rose-400'}>{formatSignedMoney(entry.realizedPnL, 4)}</span></span>
-                    <span className="text-zinc-500">U: <span className={pnl >= 0 ? 'text-yellow-400' : 'text-rose-400'}>{formatSignedMoney(pnl, 4)}</span></span>
-                  </div>
-                </button>
-              );
-            })}
+          <div className="text-xs text-zinc-500">
+            {config.leverage}x · TP +{config.takeProfitPercent}% · Stop -{config.emergencyStopPercent}% · Exposure {config.walletExposurePercent}%
+            {!config.autoCloseEnabled && ' · Auto-close OFF'}
           </div>
-        </aside>
+        </div>
+        <button
+          onClick={onStop}
+          className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-zinc-800 hover:border-rose-500/40 hover:bg-rose-500/10 text-zinc-300 hover:text-rose-300 text-xs font-bold transition-colors"
+        >
+          <Square size={14} /> Stop &amp; Reconfigure
+        </button>
+      </div>
 
-        <main className="flex flex-col">
-          <div className="border-b border-zinc-800/60 px-6 pt-5">
-            <div className="flex items-center gap-6">
-              {(['detail', 'history'] as const).map((value) => (
-                <button
-                  key={value}
-                  onClick={() => setTab(value)}
-                  className={`pb-3 text-[11px] uppercase tracking-[0.22em] font-bold border-b-2 transition-colors ${
-                    tab === value
-                      ? 'text-white border-yellow-400'
-                      : 'text-zinc-500 border-transparent hover:text-zinc-300'
-                  }`}
-                >
-                  {value}
-                </button>
-              ))}
+      {emergencyHalted && (
+        <div className="rounded-xl border border-rose-500/30 bg-rose-500/[0.06] p-4 flex items-start gap-3">
+          <AlertTriangle size={18} className="text-rose-400 flex-shrink-0 mt-0.5" />
+          <div className="text-xs text-rose-200 leading-relaxed">
+            <span className="font-bold">Emergency stop triggered.</span> Session loss exceeded {config.emergencyStopPercent}% of wallet —
+            new fills paused. Open positions will not auto-rotate until you reconfigure.
+          </div>
+        </div>
+      )}
+
+      <div className="bg-[#0A0A0B] border border-zinc-800/50 rounded-3xl overflow-hidden">
+        <div className="grid grid-cols-1 lg:grid-cols-[340px_1fr]">
+          <aside className="border-b lg:border-b-0 lg:border-r border-zinc-800/60 flex flex-col">
+            <div className="p-5 border-b border-zinc-800/60">
+              <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500 font-bold mb-4">Trading Stats</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold">Wallet</p>
+                  <p className="mt-1 text-2xl font-mono text-white">{formatMoney(wallet)}</p>
+                  <p className="mt-1 text-[10px] text-yellow-300/80 font-bold">{exposurePercent.toFixed(1)}% exposed</p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold">PNL (Realized)</p>
+                  <p className={`mt-1 text-2xl font-mono ${sessionRealized >= 0 ? 'text-yellow-400' : 'text-rose-400'}`}>
+                    {formatSignedMoney(sessionRealized, 2)}
+                  </p>
+                  <p className={`mt-1 text-[10px] font-bold ${sessionRealized >= 0 ? 'text-yellow-400/80' : 'text-rose-400/80'}`}>
+                    {realizedPercent >= 0 ? '+' : ''}{realizedPercent.toFixed(2)}%
+                  </p>
+                </div>
+                <div className="col-span-2 grid grid-cols-2 gap-2 mt-1">
+                  <div className="rounded-md bg-yellow-500/10 border border-yellow-500/20 px-2 py-1">
+                    <p className="text-[9px] uppercase tracking-wider text-yellow-400/80 font-bold">R</p>
+                    <p className="text-xs font-mono text-yellow-300">{formatSignedMoney(sessionRealized, 2)}</p>
+                  </div>
+                  <div className="rounded-md bg-rose-500/10 border border-rose-500/20 px-2 py-1">
+                    <p className="text-[9px] uppercase tracking-wider text-rose-400/80 font-bold">U</p>
+                    <p className="text-xs font-mono text-rose-300">{formatSignedMoney(totalUnrealized, 2)}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 mt-5 pt-4 border-t border-zinc-800/60">
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold">Closed</p>
+                  <p className="mt-1 text-xl font-mono text-white">{closedCount.toLocaleString()}</p>
+                  <p className="mt-1 text-[10px] text-zinc-500">{wins}W / {losses}L</p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold">Active</p>
+                  <p className="mt-1 text-xl font-mono text-white">{sessionDuration}</p>
+                  <p className="mt-1 text-[10px] text-yellow-400/80 font-bold">{winRate}% win</p>
+                </div>
+              </div>
             </div>
-          </div>
 
-          {selected ? (
-            tab === 'detail' ? (
-              <DetailPane selected={selected} positions={positions} fillProgressBars={fillProgressBars} />
+            <div className="px-5 pt-4 pb-2 flex items-center justify-between">
+              <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500 font-bold">Active Grids</p>
+              <span className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded-full bg-yellow-500/15 text-yellow-300 text-[10px] font-bold border border-yellow-500/25">
+                {activeCount}
+              </span>
+            </div>
+
+            <div className="flex-1 overflow-y-auto max-h-[640px] px-2 pb-3 space-y-1">
+              {enriched.map((entry) => {
+                const { grid } = entry;
+                const isSelected = grid.symbol === selectedSymbol;
+                const fillRatio = grid.totalLevels > 0 ? entry.filledLevels / grid.totalLevels : 0;
+                const pnl = entry.unrealizedPnL;
+                const positive = pnl >= 0;
+
+                const ageSec = Math.max(0, Math.floor((now - grid.openedAt) / 1000));
+                const ageLabel = ageSec >= 60 ? `${Math.floor(ageSec / 60)}m` : `${ageSec}s`;
+
+                return (
+                  <button
+                    key={grid.id}
+                    onClick={() => setSelectedSymbol(grid.symbol)}
+                    className={`w-full text-left px-3 py-3 rounded-lg border transition-colors flex flex-col gap-2 ${
+                      isSelected
+                        ? 'bg-yellow-500/[0.06] border-yellow-400/40'
+                        : 'bg-transparent border-transparent hover:bg-zinc-900/50 hover:border-zinc-800'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Minus size={12} className={isSelected ? 'text-yellow-300' : 'text-zinc-600'} />
+                        <span className="font-bold text-white text-sm truncate">{grid.symbol}</span>
+                      </div>
+                      <span className={`font-mono text-xs ${positive ? 'text-yellow-400' : 'text-rose-400'}`}>
+                        {formatSignedMoney(pnl, 4)}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between text-[10px] text-zinc-500 -mt-1 ml-5">
+                      <span>{grid.symbol}/USDT · <span className="font-mono text-zinc-400">{formatPrice(entry.price)}</span></span>
+                      {isSelected && <ChevronRight size={12} className="text-yellow-300" />}
+                    </div>
+
+                    <div className="flex items-center justify-between text-[10px] ml-5">
+                      <span className="text-zinc-500">
+                        <span className="text-zinc-300 font-bold">{grid.leverage}x</span>
+                        <span className="mx-1.5 text-zinc-700">·</span>
+                        <span className="font-mono">${grid.margin.toFixed(2)}</span>
+                        <span className="mx-1.5 text-zinc-700">·</span>
+                        <span>{ageLabel}</span>
+                        <span className="mx-1.5 text-zinc-700">·</span>
+                        <span className="text-yellow-300 font-bold">{grid.exposurePercent.toFixed(1)}%</span>
+                      </span>
+                    </div>
+
+                    <div className="ml-5 mr-1">
+                      <div className="h-[3px] rounded-full bg-zinc-800 overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-300 transition-[width] duration-700 ease-out"
+                          style={{ width: `${fillRatio * 100}%` }}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between mt-1 text-[10px] font-mono">
+                        <span className="text-zinc-600">{formatPrice(grid.basePrice * (1 - grid.rangePercent / 100))}</span>
+                        <span className="text-zinc-500">{entry.filledLevels}/{grid.totalLevels}</span>
+                        <span className="text-zinc-600">{formatPrice(grid.basePrice * (1 + grid.rangePercent / 100))}</span>
+                      </div>
+                    </div>
+
+                    <div className="ml-5 flex items-center gap-3 text-[10px] font-mono">
+                      <span className="text-zinc-500">R: <span className={entry.realizedPnL >= 0 ? 'text-yellow-400' : 'text-rose-400'}>{formatSignedMoney(entry.realizedPnL, 4)}</span></span>
+                      <span className="text-zinc-500">U: <span className={pnl >= 0 ? 'text-yellow-400' : 'text-rose-400'}>{formatSignedMoney(pnl, 4)}</span></span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </aside>
+
+          <main className="flex flex-col">
+            <div className="border-b border-zinc-800/60 px-6 pt-5">
+              <div className="flex items-center gap-6">
+                {(['detail', 'history'] as const).map((value) => (
+                  <button
+                    key={value}
+                    onClick={() => setTab(value)}
+                    className={`pb-3 text-[11px] uppercase tracking-[0.22em] font-bold border-b-2 transition-colors ${
+                      tab === value
+                        ? 'text-white border-yellow-400'
+                        : 'text-zinc-500 border-transparent hover:text-zinc-300'
+                    }`}
+                  >
+                    {value}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {selected ? (
+              tab === 'detail' ? (
+                <DetailPane selected={selected} positions={positions} fillProgressBars={fillProgressBars} />
+              ) : (
+                <HistoryPane rows={historyRows} symbol={selected.grid.symbol} />
+              )
             ) : (
-              <HistoryPane rows={historyRows} symbol={selected.grid.symbol} />
-            )
-          ) : (
-            <div className="p-10 text-center text-zinc-500 text-sm">No active grids.</div>
-          )}
-        </main>
+              <div className="p-10 text-center text-zinc-500 text-sm">No active grids.</div>
+            )}
+          </main>
 
-        <div className="border-t border-zinc-800/60 col-span-1 lg:col-span-2">
-          <ClosedTradesSection trades={serverTrades} summary={serverTradesSummary} />
+          <div className="border-t border-zinc-800/60 col-span-1 lg:col-span-2">
+            <ClosedTradesSection trades={serverTrades} summary={serverTradesSummary} />
+          </div>
         </div>
       </div>
     </div>
@@ -640,6 +1066,8 @@ function DetailPane({
           <ParamRow label="Order Size" value={formatMoney(orderSize)} />
           <ParamRow label="Allocated Margin" value={formatMoney(grid.margin)} />
           <ParamRow label="Wallet Exposure" value={`${grid.exposurePercent.toFixed(1)}%`} valueClassName="text-yellow-400" />
+          <ParamRow label="Take Profit" value={`+${(grid.closeThreshold * 100).toFixed(2)}%`} valueClassName="text-yellow-400" />
+          <ParamRow label="Stop Loss" value={`${(grid.stopThreshold * 100).toFixed(2)}%`} valueClassName="text-rose-400" />
           <ParamRow label="Grid Levels" value={grid.totalLevels.toString()} />
           <ParamRow label="Fills" value={selected.filledLevels.toString()} />
           <ParamRow label="Current Price" value={`$${formatPrice(selected.price)}`} valueClassName={selected.changePercent >= 0 ? 'text-yellow-400' : 'text-rose-400'} />
@@ -724,10 +1152,6 @@ function ParamRow({ label, value, valueClassName }: { label: string; value: stri
       <span className={`text-sm font-mono ${valueClassName ?? 'text-white'}`}>{value}</span>
     </div>
   );
-}
-
-function formatCurrency(value: number) {
-  return `$${Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function formatSigned(value: number) {

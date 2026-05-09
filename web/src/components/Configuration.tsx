@@ -28,11 +28,11 @@ export default function Configuration({ account, closedTradesSummary }: Configur
   };
 
   const stats = closedTradesSummary || {
-    total_trades: 0,
-    total_realized_pnl: 0,
-    avg_pnl_percent: 0,
-    auto_closed_count: 0,
-    manual_closed_count: 0,
+    totalTrades: 0,
+    totalRealizedPnl: 0,
+    avgPnlPercent: 0,
+    autoClosedCount: 0,
+    manualClosedCount: 0,
   };
 
   return (
@@ -45,21 +45,21 @@ export default function Configuration({ account, closedTradesSummary }: Configur
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-[#0F0F11] border border-zinc-800/50 rounded-xl p-4">
           <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Total Trades</p>
-          <p className="text-xl font-mono font-bold text-white mt-1">{stats.total_trades}</p>
+          <p className="text-xl font-mono font-bold text-white mt-1">{stats.totalTrades}</p>
         </div>
         <div className="bg-[#0F0F11] border border-zinc-800/50 rounded-xl p-4">
           <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Realized P&L</p>
-          <p className={`text-xl font-mono font-bold mt-1 ${stats.total_realized_pnl >= 0 ? 'text-yellow-400' : 'text-rose-400'}`}>
-            ${stats.total_realized_pnl?.toFixed(2) || '0.00'}
+          <p className={`text-xl font-mono font-bold mt-1 ${stats.totalRealizedPnl >= 0 ? 'text-yellow-400' : 'text-rose-400'}`}>
+            ${stats.totalRealizedPnl?.toFixed(2) || '0.00'}
           </p>
         </div>
         <div className="bg-[#0F0F11] border border-zinc-800/50 rounded-xl p-4">
           <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Avg P&L%</p>
-          <p className="text-xl font-mono font-bold text-white mt-1">{stats.avg_pnl_percent?.toFixed(1) || '0'}%</p>
+          <p className="text-xl font-mono font-bold text-white mt-1">{stats.avgPnlPercent?.toFixed(1) || '0'}%</p>
         </div>
         <div className="bg-[#0F0F11] border border-zinc-800/50 rounded-xl p-4">
           <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Auto Closed</p>
-          <p className="text-xl font-mono font-bold text-white mt-1">{stats.auto_closed_count}</p>
+          <p className="text-xl font-mono font-bold text-white mt-1">{stats.autoClosedCount}</p>
         </div>
       </div>
 
