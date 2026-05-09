@@ -1297,12 +1297,18 @@ function RunningTrader({
 
   const selected = enriched.find((entry) => entry.grid.symbol === selectedSymbol) ?? enriched[0];
 
-  const wallet = baseWallet + sessionRealized;
+  // Wallet displayed here is the *server-canonical* cashBalance — same value
+  // the Layout top-bar and Dashboard render. The local sessionRealized state
+  // exists only to drive the simulated grid animations and must not bleed
+  // into a balance display, otherwise the AI Trader would say $13,235 while
+  // the rest of the app correctly says $13,000.
+  const wallet = account?.cashBalance ?? 0;
+
   const totalMargin = enriched.reduce((sum, entry) => sum + entry.grid.margin, 0);
   const totalUnrealized = enriched.reduce((sum, entry) => sum + entry.unrealizedPnL, 0);
-  const realizedPercent = baseWallet > 0 ? (sessionRealized / baseWallet) * 100 : 0;
   const exposurePercent = wallet > 0 ? clamp((totalMargin / wallet) * 100, 0, 100) : 0;
   const activeCount = enriched.filter((entry) => entry.grid.active).length;
+
   // "Closed trades" must reflect real positions that hit TP or stop loss in
   // the ledger — not the local simulation's grid-close animations. Pull from
   // serverTrades filtered to this trader's asset class so the sidebar stays
@@ -1311,6 +1317,15 @@ function RunningTrader({
     () => serverTrades.filter((t) => t.assetType === assetType),
     [serverTrades, assetType]
   );
+  // Realized P&L for the current trader is the sum of realized P&L on real
+  // closed trades for this asset class. This is what the wallet has actually
+  // earned from the bot — not the simulated jitter.
+  const realRealizedPnl = useMemo(
+    () => realClosed.reduce((sum, t) => sum + t.realizedPnl, 0),
+    [realClosed]
+  );
+  const realizedPercent = baseWallet > 0 ? (realRealizedPnl / baseWallet) * 100 : 0;
+
   const wins = realClosed.filter((trade) => trade.realizedPnl > 0).length;
   const losses = realClosed.length - wins;
   const closedCount = realClosed.length;
@@ -1415,17 +1430,17 @@ function RunningTrader({
                 </div>
                 <div>
                   <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold">PNL (Realized)</p>
-                  <p className={`mt-1 text-2xl font-mono ${sessionRealized >= 0 ? 'text-yellow-400' : 'text-rose-400'}`}>
-                    {formatSignedMoney(sessionRealized, 2)}
+                  <p className={`mt-1 text-2xl font-mono ${realRealizedPnl >= 0 ? 'text-yellow-400' : 'text-rose-400'}`}>
+                    {formatSignedMoney(realRealizedPnl, 2)}
                   </p>
-                  <p className={`mt-1 text-[10px] font-bold ${sessionRealized >= 0 ? 'text-yellow-400/80' : 'text-rose-400/80'}`}>
+                  <p className={`mt-1 text-[10px] font-bold ${realRealizedPnl >= 0 ? 'text-yellow-400/80' : 'text-rose-400/80'}`}>
                     {realizedPercent >= 0 ? '+' : ''}{realizedPercent.toFixed(2)}%
                   </p>
                 </div>
                 <div className="col-span-2 grid grid-cols-2 gap-2 mt-1">
                   <div className="rounded-md bg-yellow-500/10 border border-yellow-500/20 px-2 py-1">
                     <p className="text-[9px] uppercase tracking-wider text-yellow-400/80 font-bold">R</p>
-                    <p className="text-xs font-mono text-yellow-300">{formatSignedMoney(sessionRealized, 2)}</p>
+                    <p className="text-xs font-mono text-yellow-300">{formatSignedMoney(realRealizedPnl, 2)}</p>
                   </div>
                   <div className="rounded-md bg-rose-500/10 border border-rose-500/20 px-2 py-1">
                     <p className="text-[9px] uppercase tracking-wider text-rose-400/80 font-bold">U</p>

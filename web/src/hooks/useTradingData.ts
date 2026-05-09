@@ -222,9 +222,15 @@ export function useTradingData(user: any) {
     };
 
     void load();
+    // Poll every 8s while the tab is foregrounded. /dashboard is what triggers
+    // AutoCloseProfitablePositions on the backend, so a tighter cadence here
+    // means a bot close → wallet credit → UI update round-trip lands within
+    // ~10s instead of the previous ~30s window.
     const intervalId = window.setInterval(() => {
-      void load();
-    }, 15000);
+      if (document.visibilityState === 'visible') {
+        void load();
+      }
+    }, 8000);
 
     const handleRefresh = () => {
       void load();
