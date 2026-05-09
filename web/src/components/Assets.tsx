@@ -75,6 +75,7 @@ const DEFAULT_CONFIG: TraderConfig = {
 
 const CONFIG_STORAGE_KEY = 'marketclaw:trader-config:v1';
 const RUNTIME_STORAGE_KEY = 'marketclaw:trader-running:v1';
+const ASSET_TYPE_STORAGE_KEY = 'marketclaw:trader-asset-type:v1';
 
 function loadStoredConfig(): TraderConfig | null {
   if (typeof window === 'undefined') return null;
@@ -94,6 +95,29 @@ function loadRunning(): boolean {
     return window.localStorage.getItem(RUNTIME_STORAGE_KEY) === '1';
   } catch {
     return false;
+  }
+}
+
+function loadAssetType(): AssetClass | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(ASSET_TYPE_STORAGE_KEY);
+    return raw === 'stock' || raw === 'crypto' ? raw : null;
+  } catch {
+    return null;
+  }
+}
+
+function persistAssetType(type: AssetClass | null) {
+  if (typeof window === 'undefined') return;
+  try {
+    if (type) {
+      window.localStorage.setItem(ASSET_TYPE_STORAGE_KEY, type);
+    } else {
+      window.localStorage.removeItem(ASSET_TYPE_STORAGE_KEY);
+    }
+  } catch {
+    /* ignore */
   }
 }
 
@@ -280,18 +304,28 @@ export default function Assets({ positions, symbols, account, serverTrades, serv
   const uid = user?.uid;
   const isGuest = !uid || uid === 'guest-user';
 
+  // Initial state is hydrated from localStorage so the first paint already
+  // shows the right screen — no flicker between TraderSelect → RunningTrader
+  // while we wait on the server. Guests are considered "hydrated" instantly.
   const [config, setConfig] = useState<TraderConfig>(() => loadStoredConfig() ?? DEFAULT_CONFIG);
   const [running, setRunning] = useState<boolean>(() => loadRunning() && loadStoredConfig() !== null);
-  const [selectedType, setSelectedType] = useState<AssetClass | null>(null);
+  const [selectedType, setSelectedType] = useState<AssetClass | null>(() => loadAssetType());
+  const [hydrated, setHydrated] = useState<boolean>(() => !uid || uid === 'guest-user');
   const [busy, setBusy] = useState(false);
 
   // Hydrate config + running flag + asset class from the server preferences
   // on mount, so the trader picks up where the user left off across devices.
   useEffect(() => {
-    if (isGuest) return;
+    if (isGuest) {
+      setHydrated(true);
+      return;
+    }
     let cancelled = false;
     void tradingService.getPreferences(uid).then((prefs) => {
-      if (cancelled || !prefs) return;
+      if (cancelled || !prefs) {
+        setHydrated(true);
+        return;
+      }
       const next: TraderConfig = {
         leverage: prefs.leverage ?? DEFAULT_CONFIG.leverage,
         takeProfitPercent: prefs.take_profit_percent ?? DEFAULT_CONFIG.takeProfitPercent,
@@ -308,28 +342,38 @@ export default function Assets({ positions, symbols, account, serverTrades, serv
       const serverType: AssetClass | null = prefs.bot_asset_type === 'stock' || prefs.bot_asset_type === 'crypto'
         ? prefs.bot_asset_type
         : null;
-      if (serverType) setSelectedType(serverType);
+      const isRunning = typeof prefs.bot_running === 'boolean' ? prefs.bot_running : false;
 
-      if (typeof prefs.bot_running === 'boolean') {
-        setRunning(prefs.bot_running);
-        try {
-          window.localStorage.setItem(RUNTIME_STORAGE_KEY, prefs.bot_running ? '1' : '0');
-        } catch { /* ignore */ }
-        // Legacy state: bot_running=true but no asset_type recorded — assume
-        // stock so the user lands on a sensible running view instead of the
-        // selection grid.
-        if (prefs.bot_running && !serverType) setSelectedType('stock');
-      }
-    }).catch(() => { /* leave defaults */ });
+      // Resolve asset type — server is source of truth, but keep the local
+      // selection if the bot isn't running and the user picked one offline.
+      const resolvedType = serverType
+        ?? (isRunning ? 'stock' : selectedType);
+      setSelectedType(resolvedType);
+      persistAssetType(resolvedType);
+
+      setRunning(isRunning);
+      try {
+        window.localStorage.setItem(RUNTIME_STORAGE_KEY, isRunning ? '1' : '0');
+      } catch { /* ignore */ }
+
+      setHydrated(true);
+    }).catch(() => {
+      // On error, fall back to whatever we hydrated from localStorage so the
+      // user still gets a screen instead of an empty render.
+      setHydrated(true);
+    });
     return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [uid, isGuest]);
 
   const handlePickTrader = (type: AssetClass) => {
     setSelectedType(type);
+    persistAssetType(type);
   };
 
   const handleBackToSelect = () => {
     setSelectedType(null);
+    persistAssetType(null);
   };
 
   const handleStart = async (next: TraderConfig) => {
@@ -384,7 +428,16 @@ export default function Assets({ positions, symbols, account, serverTrades, serv
   const handleSwitchTrader = async () => {
     await handleStop();
     setSelectedType(null);
+    persistAssetType(null);
   };
+
+  // Block the first render until we've reconciled with the server. Otherwise
+  // a logged-in user with a stale localStorage flag can see TraderSelect for
+  // one paint before the running view takes over (or vice versa). The
+  // skeleton matches the eventual layout so the swap feels seamless.
+  if (!hydrated) {
+    return <AiTraderSkeleton />;
+  }
 
   // Stage selection. Running trumps everything, then the selected type, else
   // the trader-picker. Edge case: somehow running with no type → caught above.
@@ -426,6 +479,43 @@ export default function Assets({ positions, symbols, account, serverTrades, serv
       serverTrades={serverTrades}
       onPick={handlePickTrader}
     />
+  );
+}
+
+function AiTraderSkeleton() {
+  return (
+    <div className="p-6 space-y-6 animate-pulse">
+      <div>
+        <div className="h-5 w-24 rounded-full bg-zinc-800/60 mb-3" />
+        <div className="h-9 w-72 rounded-md bg-zinc-800/60" />
+        <div className="h-4 w-[28rem] max-w-full rounded bg-zinc-800/40 mt-3" />
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        {[0, 1].map((i) => (
+          <div
+            key={i}
+            className="rounded-2xl border border-zinc-800/60 bg-zinc-900/30 p-6 flex flex-col gap-5 min-h-[300px]"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-xl bg-zinc-800/60" />
+              <div className="flex-1 space-y-2">
+                <div className="h-4 w-40 rounded bg-zinc-800/60" />
+                <div className="h-3 w-28 rounded bg-zinc-800/40" />
+              </div>
+            </div>
+            <div className="h-3 w-full rounded bg-zinc-800/40" />
+            <div className="h-3 w-3/4 rounded bg-zinc-800/40" />
+            <div className="grid grid-cols-2 gap-3">
+              {[0, 1, 2, 3].map((j) => (
+                <div key={j} className="h-16 rounded-xl border border-zinc-800/60 bg-zinc-950/40" />
+              ))}
+            </div>
+            <div className="h-12 rounded-xl bg-zinc-800/50" />
+          </div>
+        ))}
+      </div>
+      <div className="h-16 rounded-2xl bg-zinc-900/30 border border-zinc-800/60" />
+    </div>
   );
 }
 
