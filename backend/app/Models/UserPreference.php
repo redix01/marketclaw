@@ -26,6 +26,8 @@ class UserPreference extends Model
         'bot_running',
         'bot_started_at',
         'bot_stopped_at',
+        'bot_asset_type',
+        'commission_percent',
     ];
 
     protected function casts(): array
@@ -43,6 +45,7 @@ class UserPreference extends Model
             'bot_running' => 'boolean',
             'bot_started_at' => 'datetime',
             'bot_stopped_at' => 'datetime',
+            'commission_percent' => 'float',
         ];
     }
 

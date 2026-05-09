@@ -30,6 +30,8 @@ class UpdatePreferenceRequest extends FormRequest
             'emergency_stop_percent' => ['sometimes', 'numeric', 'min:0.1', 'max:50'],
             'max_open_positions' => ['sometimes', 'integer', 'min:1', 'max:20'],
             'auto_close_enabled' => ['sometimes', 'boolean'],
+            'bot_asset_type' => ['sometimes', 'nullable', 'string', 'in:stock,crypto'],
+            'commission_percent' => ['sometimes', 'numeric', 'min:0', 'max:100'],
         ];
     }
 }

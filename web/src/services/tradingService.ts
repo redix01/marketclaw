@@ -123,10 +123,11 @@ export const tradingService = {
     return response.data.preferences;
   },
 
-  async startBot(uid: string) {
+  async startBot(uid: string, assetType?: 'stock' | 'crypto' | null) {
     await this.checkGuest(uid);
     const response = await apiFetch<{ data: { preferences: any } }>(`/users/${uid}/bot/start`, {
       method: 'POST',
+      body: JSON.stringify({ asset_type: assetType ?? null }),
     });
     emitTradingDataChanged();
     return response.data.preferences;

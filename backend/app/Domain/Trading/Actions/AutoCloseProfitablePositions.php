@@ -13,15 +13,15 @@ class AutoCloseProfitablePositions
 {
     /**
      * Walks every open position and closes ones that have hit the user-configured
-     * take-profit (or emergency stop) threshold. Realized P&L is credited back
-     * to the paper wallet via DepositFunds-equivalent ledger entries so the bot
-     * compounds wins. Skipped entirely when the user has not started the bot.
+     * take-profit (or emergency stop) threshold. The bot only acts when the user
+     * has flipped the agent on, and only on the asset class they selected
+     * (Stock vs Crypto trader). Realized P&L is credited back to the wallet
+     * minus the platform commission so wins compound.
      */
     public function handle(PaperAccount $account, ?UserPreference $preference = null): array
     {
         $preference = $preference ?? $account->user->preferences;
 
-        // Bot must be running for the auto-close engine to act on any position.
         if (! $preference || ! $preference->bot_running) {
             return [];
         }
@@ -29,12 +29,20 @@ class AutoCloseProfitablePositions
         $autoCloseEnabled = (bool) ($preference->auto_close_enabled ?? true);
         $takeProfitPercent = (float) ($preference->take_profit_percent ?? 2.0);
         $emergencyStopPercent = (float) ($preference->emergency_stop_percent ?? 5.0);
+        $assetType = $preference->bot_asset_type;
+        $commissionPercent = max(0.0, min(100.0, (float) ($preference->commission_percent ?? 20.0)));
 
         $closed = [];
-        $positions = $account->positions()->with(['symbol.latestQuote'])->get();
+        $query = $account->positions()->with(['symbol.latestQuote']);
+        if ($assetType) {
+            $query->whereHas('symbol', fn ($q) => $q->where('asset_type', $assetType));
+        }
+        $positions = $query->get();
 
-        Log::info('AutoCloseProfitablePositions: bot_running=1 checking '
-            .$positions->count().' positions tp='.$takeProfitPercent.'% stop='.$emergencyStopPercent.'%');
+        Log::info('AutoCloseProfitablePositions: bot_running=1 type='.($assetType ?? 'all')
+            .' positions='.$positions->count()
+            .' tp='.$takeProfitPercent.'% stop='.$emergencyStopPercent.'%'
+            .' commission='.$commissionPercent.'%');
 
         foreach ($positions as $position) {
             $latestQuote = $position->symbol->latestQuote;
@@ -56,7 +64,7 @@ class AutoCloseProfitablePositions
 
             if ($hitTakeProfit || $hitStopLoss) {
                 $reason = $hitTakeProfit ? 'take_profit' : 'stop_loss';
-                $this->closePosition($account, $position, $currentPrice, $pnlPercent, $reason);
+                $this->closePosition($account, $position, $currentPrice, $pnlPercent, $reason, $commissionPercent);
                 $closed[] = $position->symbol->ticker.':'.$reason;
             }
         }
@@ -74,12 +82,20 @@ class AutoCloseProfitablePositions
         float $currentPrice,
         float $pnlPercent,
         string $reason,
+        float $commissionPercent,
     ): void {
-        DB::transaction(function () use ($account, $position, $currentPrice, $pnlPercent, $reason): void {
+        DB::transaction(function () use ($account, $position, $currentPrice, $pnlPercent, $reason, $commissionPercent): void {
             $quantity = (float) $position->quantity;
             $totalValue = $quantity * $currentPrice;
             $entryPrice = (float) $position->average_entry_price;
             $realizedPnl = $totalValue - ($quantity * $entryPrice);
+
+            // Commission only bites profits — losers don't get charged.
+            $commission = $realizedPnl > 0
+                ? round($realizedPnl * ($commissionPercent / 100), 2)
+                : 0.0;
+            $netProceeds = $totalValue - $commission;
+            $netRealized = $realizedPnl - $commission;
 
             $order = $account->orders()->create([
                 'user_id' => $account->user_id,
@@ -96,10 +112,10 @@ class AutoCloseProfitablePositions
                 'filled_at' => now(),
             ]);
 
-            // Credit the full sale proceeds back to the wallet — this is what
-            // makes realized P&L compound between cycles.
+            // Net proceeds (sale value − commission) credited to the wallet so
+            // the realized P&L compounds. Loss exits return the full sale.
             $account->update([
-                'cash_balance' => $account->cash_balance + $totalValue,
+                'cash_balance' => $account->cash_balance + $netProceeds,
             ]);
 
             $position->delete();
@@ -107,16 +123,17 @@ class AutoCloseProfitablePositions
             $account->ledgerEntries()->create([
                 'user_id' => $account->user_id,
                 'type' => 'trade_sell',
-                'amount' => $totalValue,
+                'amount' => $netProceeds,
                 'description' => sprintf(
-                    'Auto-closed (%s) %s %s @ %s (%.2f%%, %s$%s realized)',
+                    'Auto-closed (%s) %s %s @ %s (%.2f%%, %s$%s realized%s)',
                     $reason,
                     $quantity,
                     $position->symbol->ticker,
                     $currentPrice,
                     $pnlPercent,
-                    $realizedPnl >= 0 ? '+' : '-',
-                    number_format(abs($realizedPnl), 2)
+                    $netRealized >= 0 ? '+' : '-',
+                    number_format(abs($netRealized), 2),
+                    $commission > 0 ? sprintf(', −$%s commission', number_format($commission, 2)) : ''
                 ),
                 'reference_type' => Order::class,
                 'reference_id' => $order->id,
@@ -128,7 +145,10 @@ class AutoCloseProfitablePositions
                     'entry_price' => round($entryPrice, 6),
                     'exit_price' => round($currentPrice, 6),
                     'source' => 'bot',
-                    'realized_pnl' => round($realizedPnl, 2),
+                    'realized_pnl' => round($netRealized, 2),
+                    'gross_realized_pnl' => round($realizedPnl, 2),
+                    'commission' => $commission,
+                    'commission_percent' => $commissionPercent,
                     'pnl_percent' => round($pnlPercent, 2),
                     'auto_closed' => true,
                     'reason' => $reason,

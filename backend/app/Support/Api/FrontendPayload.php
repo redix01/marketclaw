@@ -62,6 +62,8 @@ class FrontendPayload
             'bot_running' => (bool) ($preference->bot_running ?? false),
             'bot_started_at' => optional($preference->bot_started_at)->toISOString(),
             'bot_stopped_at' => optional($preference->bot_stopped_at)->toISOString(),
+            'bot_asset_type' => $preference->bot_asset_type ?? null,
+            'commission_percent' => (float) ($preference->commission_percent ?? 20.0),
             'created_at' => optional($preference->created_at)->toISOString(),
             'updated_at' => optional($preference->updated_at)->toISOString(),
         ];

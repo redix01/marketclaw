@@ -49,6 +49,8 @@ class EnsurePaperAccount
                 'max_open_positions' => 5,
                 'auto_close_enabled' => true,
                 'bot_running' => false,
+                'bot_asset_type' => null,
+                'commission_percent' => 20.0,
             ]);
         }
 
