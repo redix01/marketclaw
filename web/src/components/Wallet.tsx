@@ -1,13 +1,14 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Wallet as WalletIcon,
   History,
   AlertCircle,
   CheckCircle2,
-  Copy,
-  Upload,
   ArrowUpRight,
   ArrowDownRight,
+  Plus,
+  Minus,
 } from 'lucide-react';
 import { Account, LedgerEvent } from '../types';
 import { tradingService } from '../services/tradingService';
@@ -16,72 +17,32 @@ interface WalletProps {
   user: any;
   account: Account | null;
   ledger: LedgerEvent[];
+  basePath: '/app' | '/demo';
 }
 
-type DepositWallet = {
-  id: string;
-  name: string;
-  network: string;
-  address: string;
-};
-
-const DEPOSIT_WALLETS: DepositWallet[] = [
-  {
-    id: 'usdt-trc20',
-    name: 'USDT',
-    network: 'TRC20',
-    address: import.meta.env.VITE_USDT_TRC20_ADDRESS || 'Set-VITE_USDT_TRC20_ADDRESS',
-  },
-  {
-    id: 'btc',
-    name: 'Bitcoin',
-    network: 'BTC',
-    address: import.meta.env.VITE_BTC_ADDRESS || 'Set-VITE_BTC_ADDRESS',
-  },
-  {
-    id: 'eth',
-    name: 'Ethereum',
-    network: 'ERC20',
-    address: import.meta.env.VITE_ETH_ADDRESS || 'Set-VITE_ETH_ADDRESS',
-  },
-];
-
-export default function Wallet({ user, account, ledger }: WalletProps) {
+export default function Wallet({ user, account, ledger, basePath }: WalletProps) {
+  const navigate = useNavigate();
   const [amount, setAmount] = useState<string>('');
-  const [selectedWalletId, setSelectedWalletId] = useState<string>(DEPOSIT_WALLETS[0].id);
-  const [transactionReference, setTransactionReference] = useState('');
-  const [notes, setNotes] = useState('');
-  const [proofFile, setProofFile] = useState<File | null>(null);
-  const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const selectedWallet = useMemo(
-    () => DEPOSIT_WALLETS.find((wallet) => wallet.id === selectedWalletId) ?? DEPOSIT_WALLETS[0],
-    [selectedWalletId]
-  );
+  const handleDeposit = () => {
+    const params = new URLSearchParams();
 
-  const handleCopyAddress = async () => {
-    try {
-      await navigator.clipboard.writeText(selectedWallet.address);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-    } catch {
-      setError('Unable to copy the wallet address. Please copy it manually.');
+    if (amount.trim()) {
+      params.set('amount', amount);
     }
+
+    navigate(`${basePath}/wallet/deposit${params.toString() ? `?${params.toString()}` : ''}`);
   };
 
-  const handleDepositSubmit = async () => {
+  const handleWithdraw = async () => {
     const numericAmount = Number(amount);
 
     if (!user) return;
     if (!numericAmount || numericAmount <= 0) {
-      setError('Enter a valid deposit amount.');
-      return;
-    }
-    if (!proofFile) {
-      setError('Upload your payment proof before submitting.');
+      setError('Enter a valid amount before withdrawing.');
       return;
     }
 
@@ -90,24 +51,11 @@ export default function Wallet({ user, account, ledger }: WalletProps) {
     setSuccess(null);
 
     try {
-      const payload = new FormData();
-      payload.append('amount', String(numericAmount));
-      payload.append('wallet_name', selectedWallet.name);
-      payload.append('wallet_network', selectedWallet.network);
-      payload.append('wallet_address', selectedWallet.address);
-      payload.append('transaction_reference', transactionReference);
-      payload.append('notes', notes);
-      payload.append('proof_file', proofFile);
-
-      await tradingService.submitDepositRequest(user.uid, payload);
-
-      setSuccess('Deposit proof submitted successfully. Admin has been notified by email.');
+      await tradingService.withdrawFunds(user.uid, numericAmount);
+      setSuccess(`Withdrawal request for $${numericAmount.toLocaleString()} completed.`);
       setAmount('');
-      setTransactionReference('');
-      setNotes('');
-      setProofFile(null);
     } catch (err: any) {
-      setError(err.message || 'Unable to submit deposit proof.');
+      setError(err.message || 'Unable to process withdrawal.');
     } finally {
       setLoading(false);
     }
@@ -141,105 +89,23 @@ export default function Wallet({ user, account, ledger }: WalletProps) {
         </div>
 
         <div className="bg-[#0F0F11] border border-zinc-800/50 rounded-3xl p-6 md:p-8">
-          <div className="max-w-2xl mx-auto space-y-6">
+          <div className="max-w-xl mx-auto space-y-6">
             <div className="text-center">
-              <p className="text-[10px] uppercase tracking-[0.3em] text-zinc-500 font-bold">Wallet Deposit</p>
-              <h3 className="mt-2 text-2xl font-bold text-white">Submit deposit proof</h3>
-              <p className="mt-2 text-sm text-zinc-400">
-                Enter your amount, choose a wallet, copy the address, then upload your payment proof for admin review.
-              </p>
+              <p className="text-[10px] uppercase tracking-[0.3em] text-zinc-500 font-bold">Wallet Actions</p>
+              <h3 className="mt-2 text-2xl font-bold text-white">Manage your funds</h3>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="md:col-span-2">
-                <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold mb-1.5 block">Amount ($)</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={amount}
-                  onChange={(event) => setAmount(event.target.value)}
-                  className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-3 px-4 text-sm font-mono focus:outline-none focus:border-yellow-500/50 transition-all"
-                  placeholder="1000"
-                />
-              </div>
-
-              <div className="md:col-span-2">
-                <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold mb-1.5 block">Select Wallet</label>
-                <div className="grid gap-3 md:grid-cols-3">
-                  {DEPOSIT_WALLETS.map((wallet) => {
-                    const active = wallet.id === selectedWallet.id;
-                    return (
-                      <button
-                        key={wallet.id}
-                        type="button"
-                        onClick={() => setSelectedWalletId(wallet.id)}
-                        className={`rounded-2xl border p-4 text-left transition-all ${
-                          active
-                            ? 'border-yellow-500/50 bg-yellow-500/10 text-yellow-300'
-                            : 'border-zinc-800 bg-zinc-900/60 text-zinc-300 hover:border-zinc-700'
-                        }`}
-                      >
-                        <p className="text-sm font-bold">{wallet.name}</p>
-                        <p className="mt-1 text-[10px] uppercase tracking-wider">{wallet.network}</p>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="md:col-span-2 rounded-2xl border border-zinc-800 bg-zinc-900/50 p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Wallet Address</p>
-                    <p className="mt-2 break-all font-mono text-sm text-white">{selectedWallet.address}</p>
-                    <p className="mt-2 text-xs text-zinc-500">{selectedWallet.name} on {selectedWallet.network}</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleCopyAddress}
-                    className="shrink-0 inline-flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-xs font-bold text-zinc-200 hover:border-yellow-500/40 hover:text-yellow-300 transition-colors"
-                  >
-                    <Copy size={14} />
-                    {copied ? 'Copied' : 'Copy'}
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold mb-1.5 block">Transaction Reference</label>
-                <input
-                  type="text"
-                  value={transactionReference}
-                  onChange={(event) => setTransactionReference(event.target.value)}
-                  className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-yellow-500/50 transition-all"
-                  placeholder="Optional hash or reference"
-                />
-              </div>
-
-              <div>
-                <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold mb-1.5 block">Payment Proof</label>
-                <label className="flex items-center gap-3 rounded-xl border border-dashed border-zinc-700 bg-zinc-900/40 px-4 py-3 text-sm text-zinc-300 cursor-pointer hover:border-yellow-500/40 transition-colors">
-                  <Upload size={16} className="text-yellow-400" />
-                  <span className="truncate">{proofFile ? proofFile.name : 'Upload JPG, PNG, or PDF'}</span>
-                  <input
-                    type="file"
-                    accept=".jpg,.jpeg,.png,.pdf"
-                    className="hidden"
-                    onChange={(event) => setProofFile(event.target.files?.[0] ?? null)}
-                  />
-                </label>
-              </div>
-
-              <div className="md:col-span-2">
-                <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold mb-1.5 block">Notes</label>
-                <textarea
-                  value={notes}
-                  onChange={(event) => setNotes(event.target.value)}
-                  className="w-full min-h-28 bg-zinc-900/50 border border-zinc-800 rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-yellow-500/50 transition-all resize-none"
-                  placeholder="Add any extra payment details for admin review"
-                />
-              </div>
+            <div>
+              <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold mb-1.5 block">Amount ($)</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={amount}
+                onChange={(event) => setAmount(event.target.value)}
+                className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-3 px-4 text-sm font-mono focus:outline-none focus:border-yellow-500/50 transition-all"
+                placeholder="1000"
+              />
             </div>
 
             {error && (
@@ -256,14 +122,23 @@ export default function Wallet({ user, account, ledger }: WalletProps) {
               </div>
             )}
 
-            <div className="flex justify-center">
+            <div className="grid grid-cols-2 gap-4">
+              <button
+                type="button"
+                onClick={handleDeposit}
+                className="flex flex-col items-center justify-center gap-3 rounded-2xl bg-yellow-500 px-6 py-5 text-sm font-bold text-black transition-all hover:bg-yellow-400"
+              >
+                <Plus size={20} />
+                Deposit
+              </button>
               <button
                 type="button"
                 disabled={loading}
-                onClick={handleDepositSubmit}
-                className="inline-flex items-center justify-center rounded-2xl bg-yellow-500 px-8 py-3 text-sm font-bold text-black transition-all hover:bg-yellow-400 disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={handleWithdraw}
+                className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-zinc-700 bg-zinc-900 px-6 py-5 text-sm font-bold text-white transition-all hover:border-rose-500/40 hover:text-rose-300 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {loading ? 'Submitting...' : 'Submit Deposit Proof'}
+                <Minus size={20} />
+                Withdrawal
               </button>
             </div>
           </div>

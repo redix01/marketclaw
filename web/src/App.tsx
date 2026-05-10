@@ -9,6 +9,7 @@ import Dashboard from './components/Dashboard';
 import Portfolio from './components/Portfolio';
 import Assets from './components/Assets';
 import Wallet from './components/Wallet';
+import WalletDepositPage from './components/WalletDepositPage';
 import Settings from './components/Settings';
 import LandingPage from './components/LandingPage';
 
@@ -51,7 +52,7 @@ function DashboardShell({
       case 'ai-trader':
         return <Assets basePath={basePath} positions={positions} symbols={symbols} account={account} serverTrades={closedTrades} serverTradesSummary={closedTradesSummary} user={user} />;
       case 'wallet':
-        return <Wallet user={user} account={account} ledger={ledger} />;
+        return <Wallet user={user} account={account} ledger={ledger} basePath={basePath} />;
       case 'settings':
         return <Settings user={user} />;
       default:
@@ -77,6 +78,43 @@ function DashboardShell({
           transition={{ duration: 0.2 }}
         >
           {renderContent()}
+        </motion.div>
+      </AnimatePresence>
+    </Layout>
+  );
+}
+
+function WalletDepositShell({
+  basePath,
+  user,
+  isGuest,
+  onExitGuest,
+}: {
+  basePath: '/app' | '/demo';
+  user: any;
+  isGuest: boolean;
+  onExitGuest: () => void;
+}) {
+  const { account } = useTradingData(user);
+
+  return (
+    <Layout
+      activeTab="wallet"
+      basePath={basePath}
+      user={user}
+      account={account}
+      isGuest={isGuest}
+      onExitGuest={onExitGuest}
+    >
+      <AnimatePresence mode="wait">
+        <motion.div
+          key="wallet-deposit"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          transition={{ duration: 0.2 }}
+        >
+          <WalletDepositPage user={user} basePath={basePath} />
         </motion.div>
       </AnimatePresence>
     </Layout>
@@ -148,6 +186,24 @@ function AppRoutes({
         element={user ? <Navigate to="/app/overview" replace /> : <Navigate to="/auth" replace state={{ from: location }} />}
       />
       <Route
+        path="/app/wallet/deposit"
+        element={
+          user ? (
+            <WalletDepositShell
+              basePath="/app"
+              user={user}
+              isGuest={false}
+              onExitGuest={() => {
+                setIsGuest(false);
+                navigate('/');
+              }}
+            />
+          ) : (
+            <Navigate to="/auth" replace state={{ from: location }} />
+          )
+        }
+      />
+      <Route
         path="/app/:tab"
         element={
           user ? (
@@ -166,6 +222,20 @@ function AppRoutes({
         }
       />
       <Route path="/demo" element={<Navigate to="/demo/overview" replace />} />
+      <Route
+        path="/demo/wallet/deposit"
+        element={
+          <WalletDepositShell
+            basePath="/demo"
+            user={guestUser}
+            isGuest={true}
+            onExitGuest={() => {
+              setIsGuest(false);
+              navigate('/');
+            }}
+          />
+        }
+      />
       <Route
         path="/demo/:tab"
         element={
