@@ -86,15 +86,13 @@ export const tradingService = {
     return;
   },
 
-  async depositFunds(uid: string, amount: number) {
+  async submitDepositRequest(uid: string, payload: FormData) {
     await this.checkGuest(uid);
 
     await apiFetch(`/users/${uid}/account/deposits`, {
       method: 'POST',
-      body: JSON.stringify({ amount }),
+      body: payload,
     });
-
-    emitTradingDataChanged();
   },
 
   async withdrawFunds(uid: string, amount: number) {

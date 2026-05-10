@@ -16,7 +16,12 @@ class DepositFundsRequest extends FormRequest
     {
         return [
             'amount' => ['required', 'numeric', 'gt:0'],
-            'description' => ['nullable', 'string', 'max:255'],
+            'wallet_name' => ['required', 'string', 'max:100'],
+            'wallet_network' => ['required', 'string', 'max:100'],
+            'wallet_address' => ['required', 'string', 'max:255'],
+            'transaction_reference' => ['nullable', 'string', 'max:255'],
+            'notes' => ['nullable', 'string', 'max:2000'],
+            'proof_file' => ['required', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:5120'],
         ];
     }
 }

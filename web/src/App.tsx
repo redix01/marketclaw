@@ -7,14 +7,12 @@ import Layout from './components/Layout';
 import Auth from './components/Auth';
 import Dashboard from './components/Dashboard';
 import Portfolio from './components/Portfolio';
-import Trade from './components/Trade';
 import Assets from './components/Assets';
-import Configuration from './components/Configuration';
 import Wallet from './components/Wallet';
 import Settings from './components/Settings';
 import LandingPage from './components/LandingPage';
 
-const APP_TABS = ['overview', 'portfolio', 'ai-trader', 'trade', 'wallet', 'configuration', 'settings'] as const;
+const APP_TABS = ['overview', 'portfolio', 'ai-trader', 'wallet', 'settings'] as const;
 type AppTab = (typeof APP_TABS)[number];
 
 function normalizeTab(tab?: string): AppTab {
@@ -52,10 +50,6 @@ function DashboardShell({
         return <Portfolio account={account} positions={positions} symbols={symbols} />;
       case 'ai-trader':
         return <Assets basePath={basePath} positions={positions} symbols={symbols} account={account} serverTrades={closedTrades} serverTradesSummary={closedTradesSummary} user={user} />;
-      case 'configuration':
-        return <Configuration account={account} closedTradesSummary={closedTradesSummary} />;
-      case 'trade':
-        return <Trade user={user} account={account} positions={positions} symbols={symbols} />;
       case 'wallet':
         return <Wallet user={user} account={account} ledger={ledger} />;
       case 'settings':

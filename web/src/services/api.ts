@@ -53,9 +53,10 @@ export class ApiError extends Error {
 export async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   const session = getStoredSession();
   const headers = new Headers(options.headers || {});
+  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
 
   if (!headers.has('Accept')) headers.set('Accept', 'application/json');
-  if (!headers.has('Content-Type') && options.body) headers.set('Content-Type', 'application/json');
+  if (!headers.has('Content-Type') && options.body && !isFormData) headers.set('Content-Type', 'application/json');
   if (session?.token) headers.set('Authorization', `Bearer ${session.token}`);
 
   const response = await fetch(`${API_BASE_URL}${path}`, {
