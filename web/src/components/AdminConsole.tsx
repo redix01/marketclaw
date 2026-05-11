@@ -78,13 +78,15 @@ export default function AdminConsole({ tab }: AdminConsoleProps) {
   const [paymentMethodForm, setPaymentMethodForm] = useState<any>({ name: '', network: '', address: '', instructions: '', is_active: true });
   const [passwordForm, setPasswordForm] = useState<any>({ current_password: '', password: '', password_confirmation: '' });
   const [editingUserId, setEditingUserId] = useState<number | null>(null);
+  const [isUserModalOpen, setIsUserModalOpen] = useState(false);
+  const [userActionModal, setUserActionModal] = useState<{ userId: number; type: 'deposit' | 'withdrawal'; name: string } | null>(null);
   const [editingTransactionId, setEditingTransactionId] = useState<number | null>(null);
   const [editingPaymentMethodId, setEditingPaymentMethodId] = useState<number | null>(null);
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
   const [isPaymentMethodModalOpen, setIsPaymentMethodModalOpen] = useState(false);
   const [transactionTypeFilter, setTransactionTypeFilter] = useState<'deposit' | 'withdrawal'>('deposit');
   const [reviewNotes, setReviewNotes] = useState<Record<number, string>>({});
-  const [quickAmounts, setQuickAmounts] = useState<Record<number, string>>({});
+  const [userActionAmount, setUserActionAmount] = useState('');
 
   const load = async () => {
     setLoading(true);
@@ -144,6 +146,7 @@ export default function AdminConsole({ tab }: AdminConsoleProps) {
       }
       setEditingUserId(null);
       setUserForm({ name: '', email: '', password: '', password_confirmation: '', status: 'active', is_admin: false, initial_balance: 10000 });
+      setIsUserModalOpen(false);
       await load();
     } catch (err: any) {
       setError(err.message || 'Unable to save user.');
@@ -153,7 +156,7 @@ export default function AdminConsole({ tab }: AdminConsoleProps) {
   };
 
   const handleQuickTransaction = async (userId: number, type: 'deposit' | 'withdrawal') => {
-    const amount = Number(quickAmounts[userId] || 0);
+    const amount = Number(userActionAmount || 0);
     if (!amount || amount <= 0) {
       setError('Enter a valid quick action amount.');
       return;
@@ -169,7 +172,8 @@ export default function AdminConsole({ tab }: AdminConsoleProps) {
         description: type === 'deposit' ? 'Admin account funding' : 'Admin account debit',
       });
       setSuccess(type === 'deposit' ? 'User funded successfully.' : 'User debited successfully.');
-      setQuickAmounts((current) => ({ ...current, [userId]: '' }));
+      setUserActionAmount('');
+      setUserActionModal(null);
       await load();
     } catch (err: any) {
       setError(err.message || 'Unable to process quick transaction.');
@@ -251,6 +255,35 @@ export default function AdminConsole({ tab }: AdminConsoleProps) {
     setEditingPaymentMethodId(null);
     setPaymentMethodForm({ name: '', network: '', address: '', instructions: '', is_active: true });
     setIsPaymentMethodModalOpen(true);
+  };
+
+  const openCreateUserModal = () => {
+    resetFlash();
+    setEditingUserId(null);
+    setUserForm({ name: '', email: '', password: '', password_confirmation: '', status: 'active', is_admin: false, initial_balance: 10000 });
+    setIsUserModalOpen(true);
+  };
+
+  const openEditUserModal = (row: AdminUserRow) => {
+    resetFlash();
+    setEditingUserId(row.user.id);
+    setUserForm({
+      ...row.user,
+      password: '',
+      password_confirmation: '',
+      initial_balance: row.account.cash_balance,
+    });
+    setIsUserModalOpen(true);
+  };
+
+  const openUserActionModal = (row: AdminUserRow, type: 'deposit' | 'withdrawal') => {
+    resetFlash();
+    setUserActionAmount('');
+    setUserActionModal({
+      userId: row.user.id,
+      type,
+      name: row.user.name,
+    });
   };
 
   const openCreateTransactionModal = () => {
@@ -385,36 +418,17 @@ export default function AdminConsole({ tab }: AdminConsoleProps) {
       )}
 
       {tab === 'users' && (
-        <div className="grid gap-6 xl:grid-cols-[380px,1fr]">
-          <SectionCard title={editingUserId ? 'Edit User' : 'Create User'}>
-            <div className="space-y-3">
-              <input className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-3 text-sm" placeholder="Full name" value={userForm.name} onChange={(e) => setUserForm({ ...userForm, name: e.target.value })} />
-              <input className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-3 text-sm" placeholder="Email" value={userForm.email} onChange={(e) => setUserForm({ ...userForm, email: e.target.value })} />
-              <input className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-3 text-sm" placeholder="Password" type="password" value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} />
-              <input className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-3 text-sm" placeholder="Confirm password" type="password" value={userForm.password_confirmation} onChange={(e) => setUserForm({ ...userForm, password_confirmation: e.target.value })} />
-              <input className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-3 text-sm" placeholder="Initial balance" type="number" value={userForm.initial_balance} onChange={(e) => setUserForm({ ...userForm, initial_balance: Number(e.target.value) })} />
-              <select className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-3 text-sm" value={userForm.status} onChange={(e) => setUserForm({ ...userForm, status: e.target.value })}>
-                <option value="active">active</option>
-                <option value="disabled">disabled</option>
-              </select>
-              <label className="flex items-center gap-2 text-sm text-zinc-300">
-                <input type="checkbox" checked={userForm.is_admin} onChange={(e) => setUserForm({ ...userForm, is_admin: e.target.checked })} />
-                Grant admin access
-              </label>
-              <div className="flex gap-3">
-                <button className="flex-1 rounded-xl bg-yellow-500 px-4 py-3 text-sm font-bold text-black" disabled={saving} onClick={handleCreateOrUpdateUser}>
-                  {editingUserId ? 'Update User' : 'Create User'}
-                </button>
-                {editingUserId && (
-                  <button className="rounded-xl border border-zinc-700 px-4 py-3 text-sm font-bold text-zinc-300" onClick={() => { setEditingUserId(null); setUserForm({ name: '', email: '', password: '', password_confirmation: '', status: 'active', is_admin: false, initial_balance: 10000 }); }}>
-                    Cancel
-                  </button>
-                )}
-              </div>
-            </div>
-          </SectionCard>
-
+        <>
           <SectionCard title="User Management">
+            <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-zinc-400">Manage user accounts, balances, and admin access from one place.</p>
+              <button
+                className="rounded-xl bg-yellow-500 px-4 py-3 text-sm font-bold text-black transition hover:bg-yellow-400"
+                onClick={openCreateUserModal}
+              >
+                Create User
+              </button>
+            </div>
             <div className="space-y-4">
               {users.map((row) => (
                 <div key={row.user.id} className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
@@ -429,21 +443,110 @@ export default function AdminConsole({ tab }: AdminConsoleProps) {
                       <div><p className="text-zinc-500">Deposits</p><p className="font-mono">${row.account.total_deposits.toLocaleString()}</p></div>
                       <div><p className="text-zinc-500">Withdrawals</p><p className="font-mono">${row.account.total_withdrawals.toLocaleString()}</p></div>
                       <div className="flex gap-2 items-end">
-                        <button className="rounded-lg border border-zinc-700 px-3 py-2 text-xs font-bold text-zinc-200" onClick={() => { setEditingUserId(row.user.id); setUserForm({ ...row.user, password: '', password_confirmation: '', initial_balance: row.account.cash_balance }); }}>Edit</button>
+                        <button className="rounded-lg border border-zinc-700 px-3 py-2 text-xs font-bold text-zinc-200" onClick={() => openEditUserModal(row)}>Edit</button>
                         <button className="rounded-lg border border-rose-500/30 px-3 py-2 text-xs font-bold text-rose-300" onClick={async () => { await adminService.deleteUser(row.user.id); await load(); }}>Delete</button>
                       </div>
                     </div>
                   </div>
-                  <div className="mt-4 flex flex-col gap-3 md:flex-row">
-                    <input className="flex-1 bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm" placeholder="Quick amount" type="number" value={quickAmounts[row.user.id] || ''} onChange={(e) => setQuickAmounts((current) => ({ ...current, [row.user.id]: e.target.value }))} />
-                    <button className="rounded-xl bg-yellow-500 px-4 py-3 text-sm font-bold text-black" onClick={() => handleQuickTransaction(row.user.id, 'deposit')}>Fund User</button>
-                    <button className="rounded-xl border border-zinc-700 px-4 py-3 text-sm font-bold text-zinc-200" onClick={() => handleQuickTransaction(row.user.id, 'withdrawal')}>Debit User</button>
+                  <div className="mt-4 flex flex-wrap gap-3">
+                    <button className="rounded-xl bg-yellow-500 px-4 py-3 text-sm font-bold text-black" onClick={() => openUserActionModal(row, 'deposit')}>Fund User</button>
+                    <button className="rounded-xl border border-zinc-700 px-4 py-3 text-sm font-bold text-zinc-200" onClick={() => openUserActionModal(row, 'withdrawal')}>Debit User</button>
                   </div>
                 </div>
               ))}
             </div>
           </SectionCard>
-        </div>
+          <Modal
+            title={editingUserId ? 'Edit User' : 'Create User'}
+            open={isUserModalOpen}
+            onClose={() => {
+              if (saving) {
+                return;
+              }
+              setIsUserModalOpen(false);
+              setEditingUserId(null);
+              setUserForm({ name: '', email: '', password: '', password_confirmation: '', status: 'active', is_admin: false, initial_balance: 10000 });
+            }}
+          >
+            <div className="space-y-3">
+              <input className="w-full rounded-xl border border-zinc-800 bg-zinc-900/50 px-4 py-3 text-sm" placeholder="Full name" value={userForm.name} onChange={(e) => setUserForm({ ...userForm, name: e.target.value })} />
+              <input className="w-full rounded-xl border border-zinc-800 bg-zinc-900/50 px-4 py-3 text-sm" placeholder="Email" value={userForm.email} onChange={(e) => setUserForm({ ...userForm, email: e.target.value })} />
+              <input className="w-full rounded-xl border border-zinc-800 bg-zinc-900/50 px-4 py-3 text-sm" placeholder="Password" type="password" value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} />
+              <input className="w-full rounded-xl border border-zinc-800 bg-zinc-900/50 px-4 py-3 text-sm" placeholder="Confirm password" type="password" value={userForm.password_confirmation} onChange={(e) => setUserForm({ ...userForm, password_confirmation: e.target.value })} />
+              <input className="w-full rounded-xl border border-zinc-800 bg-zinc-900/50 px-4 py-3 text-sm" placeholder="Initial balance" type="number" value={userForm.initial_balance} onChange={(e) => setUserForm({ ...userForm, initial_balance: Number(e.target.value) })} />
+              <select className="w-full rounded-xl border border-zinc-800 bg-zinc-900/50 px-4 py-3 text-sm" value={userForm.status} onChange={(e) => setUserForm({ ...userForm, status: e.target.value })}>
+                <option value="active">active</option>
+                <option value="disabled">disabled</option>
+              </select>
+              <label className="flex items-center gap-2 text-sm text-zinc-300">
+                <input type="checkbox" checked={userForm.is_admin} onChange={(e) => setUserForm({ ...userForm, is_admin: e.target.checked })} />
+                Grant admin access
+              </label>
+              <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:justify-end">
+                <button
+                  className="rounded-xl border border-zinc-700 px-4 py-3 text-sm font-bold text-zinc-300"
+                  disabled={saving}
+                  onClick={() => {
+                    setIsUserModalOpen(false);
+                    setEditingUserId(null);
+                    setUserForm({ name: '', email: '', password: '', password_confirmation: '', status: 'active', is_admin: false, initial_balance: 10000 });
+                  }}
+                >
+                  Cancel
+                </button>
+                <button className="rounded-xl bg-yellow-500 px-5 py-3 text-sm font-bold text-black" disabled={saving} onClick={handleCreateOrUpdateUser}>
+                  {editingUserId ? 'Update User' : 'Create User'}
+                </button>
+              </div>
+            </div>
+          </Modal>
+
+          <Modal
+            title={userActionModal ? `${userActionModal.type === 'deposit' ? 'Fund' : 'Debit'} ${userActionModal.name}` : 'Quick Action'}
+            open={!!userActionModal}
+            onClose={() => {
+              if (saving) {
+                return;
+              }
+              setUserActionModal(null);
+              setUserActionAmount('');
+            }}
+          >
+            {userActionModal && (
+              <div className="space-y-4">
+                <p className="text-sm text-zinc-400">
+                  {userActionModal.type === 'deposit' ? 'Credit this user account with a manual admin deposit.' : 'Debit this user account with a manual admin withdrawal.'}
+                </p>
+                <input
+                  className="w-full rounded-xl border border-zinc-800 bg-zinc-900/50 px-4 py-3 text-sm"
+                  placeholder="Amount"
+                  type="number"
+                  value={userActionAmount}
+                  onChange={(e) => setUserActionAmount(e.target.value)}
+                />
+                <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:justify-end">
+                  <button
+                    className="rounded-xl border border-zinc-700 px-4 py-3 text-sm font-bold text-zinc-300"
+                    disabled={saving}
+                    onClick={() => {
+                      setUserActionModal(null);
+                      setUserActionAmount('');
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className={`rounded-xl px-5 py-3 text-sm font-bold ${userActionModal.type === 'deposit' ? 'bg-yellow-500 text-black' : 'border border-zinc-700 text-zinc-200'}`}
+                    disabled={saving}
+                    onClick={() => handleQuickTransaction(userActionModal.userId, userActionModal.type)}
+                  >
+                    {userActionModal.type === 'deposit' ? 'Fund User' : 'Debit User'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </Modal>
+        </>
       )}
 
       {tab === 'transactions' && (
