@@ -7,9 +7,15 @@ use Illuminate\Support\Facades\DB;
 
 class DepositFunds
 {
-    public function handle(PaperAccount $account, float $amount, string $description = 'Manual deposit'): PaperAccount
+    public function handle(
+        PaperAccount $account,
+        float $amount,
+        string $description = 'Manual deposit',
+        string $source = 'api',
+        array $meta = [],
+    ): PaperAccount
     {
-        DB::transaction(function () use ($account, $amount, $description): void {
+        DB::transaction(function () use ($account, $amount, $description, $source, $meta): void {
             $account->refresh();
 
             $account->update([
@@ -22,9 +28,9 @@ class DepositFunds
                 'type' => 'deposit',
                 'amount' => $amount,
                 'description' => $description,
-                'meta' => [
-                    'source' => 'api',
-                ],
+                'meta' => array_merge([
+                    'source' => $source,
+                ], $meta),
             ]);
         });
 

@@ -1,61 +1,65 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, CheckCircle2, Copy, Upload, Wallet as WalletIcon, AlertCircle } from 'lucide-react';
 import { tradingService } from '../services/tradingService';
+import { PaymentMethod } from '../types';
 
 interface WalletDepositPageProps {
   user: any;
   basePath: '/app' | '/demo';
 }
 
-type DepositWallet = {
-  id: string;
-  name: string;
-  network: string;
-  address: string;
-};
-
-const DEPOSIT_WALLETS: DepositWallet[] = [
-  {
-    id: 'usdt-trc20',
-    name: 'USDT',
-    network: 'TRC20',
-    address: import.meta.env.VITE_USDT_TRC20_ADDRESS || 'Set-VITE_USDT_TRC20_ADDRESS',
-  },
-  {
-    id: 'btc',
-    name: 'Bitcoin',
-    network: 'BTC',
-    address: import.meta.env.VITE_BTC_ADDRESS || 'Set-VITE_BTC_ADDRESS',
-  },
-  {
-    id: 'eth',
-    name: 'Ethereum',
-    network: 'ERC20',
-    address: import.meta.env.VITE_ETH_ADDRESS || 'Set-VITE_ETH_ADDRESS',
-  },
-];
-
 export default function WalletDepositPage({ user, basePath }: WalletDepositPageProps) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [amount, setAmount] = useState(searchParams.get('amount') || '');
-  const [selectedWalletId, setSelectedWalletId] = useState(DEPOSIT_WALLETS[0].id);
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
+  const [selectedWalletId, setSelectedWalletId] = useState<number | null>(null);
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [copied, setCopied] = useState(false);
   const [transactionReference, setTransactionReference] = useState('');
   const [notes, setNotes] = useState('');
   const [proofFile, setProofFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingMethods, setLoadingMethods] = useState(true);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    let active = true;
+
+    void tradingService.getPaymentMethods()
+      .then((methods) => {
+        if (!active) return;
+        setPaymentMethods(methods);
+        setSelectedWalletId(methods[0]?.id ?? null);
+      })
+      .catch((err: any) => {
+        if (!active) return;
+        setError(err.message || 'Unable to load payment methods.');
+      })
+      .finally(() => {
+        if (active) {
+          setLoadingMethods(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const selectedWallet = useMemo(
-    () => DEPOSIT_WALLETS.find((wallet) => wallet.id === selectedWalletId) ?? DEPOSIT_WALLETS[0],
-    [selectedWalletId]
+    () => paymentMethods.find((wallet) => wallet.id === selectedWalletId) ?? null,
+    [paymentMethods, selectedWalletId]
   );
 
   const handleCopyAddress = async () => {
+    if (!selectedWallet) {
+      setError('No payment method is available yet.');
+      return;
+    }
+
     try {
       await navigator.clipboard.writeText(selectedWallet.address);
       setCopied(true);
@@ -73,6 +77,10 @@ export default function WalletDepositPage({ user, basePath }: WalletDepositPageP
       setError('Enter a valid amount before proceeding.');
       return;
     }
+    if (!selectedWallet) {
+      setError('No payment method is available yet.');
+      return;
+    }
 
     setError(null);
     setStep(2);
@@ -87,6 +95,10 @@ export default function WalletDepositPage({ user, basePath }: WalletDepositPageP
     const numericAmount = Number(amount);
 
     if (!user) return;
+    if (!selectedWallet) {
+      setError('No payment method is available yet.');
+      return;
+    }
     if (!numericAmount || numericAmount <= 0) {
       setError('Enter a valid amount before submitting.');
       return;
@@ -103,9 +115,7 @@ export default function WalletDepositPage({ user, basePath }: WalletDepositPageP
     try {
       const payload = new FormData();
       payload.append('amount', String(numericAmount));
-      payload.append('wallet_name', selectedWallet.name);
-      payload.append('wallet_network', selectedWallet.network);
-      payload.append('wallet_address', selectedWallet.address);
+      payload.append('payment_method_id', String(selectedWallet.id));
       payload.append('transaction_reference', transactionReference);
       payload.append('notes', notes);
       payload.append('proof_file', proofFile);
@@ -204,9 +214,16 @@ export default function WalletDepositPage({ user, basePath }: WalletDepositPageP
 
               <div>
                 <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold mb-2 block">Choose Wallet</label>
+                {loadingMethods ? (
+                  <div className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-4 text-sm text-zinc-400">Loading payment methods...</div>
+                ) : paymentMethods.length === 0 ? (
+                  <div className="rounded-2xl border border-rose-500/20 bg-rose-500/10 p-4 text-sm text-rose-300">
+                    No active payment method is available yet. Contact admin.
+                  </div>
+                ) : (
                 <div className="grid gap-3 md:grid-cols-3">
-                  {DEPOSIT_WALLETS.map((wallet) => {
-                    const active = wallet.id === selectedWallet.id;
+                  {paymentMethods.map((wallet) => {
+                    const active = wallet.id === selectedWallet?.id;
 
                     return (
                       <button
@@ -220,11 +237,12 @@ export default function WalletDepositPage({ user, basePath }: WalletDepositPageP
                         }`}
                       >
                         <p className="text-sm font-bold">{wallet.name}</p>
-                        <p className="mt-1 text-[10px] uppercase tracking-wider">{wallet.network}</p>
+                        <p className="mt-1 text-[10px] uppercase tracking-wider">{wallet.network || 'Default'}</p>
                       </button>
                     );
                   })}
                 </div>
+                )}
               </div>
 
               <div className="flex justify-center">
@@ -243,10 +261,13 @@ export default function WalletDepositPage({ user, basePath }: WalletDepositPageP
             <div className="space-y-5">
               <div className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-5">
                 <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Selected Wallet</p>
-                <p className="mt-2 text-lg font-bold text-white">{selectedWallet.name}</p>
-                <p className="text-xs text-zinc-500">{selectedWallet.network}</p>
+                <p className="mt-2 text-lg font-bold text-white">{selectedWallet?.name}</p>
+                <p className="text-xs text-zinc-500">{selectedWallet?.network || 'Default'}</p>
                 <p className="mt-4 text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Wallet Address</p>
-                <p className="mt-2 break-all font-mono text-sm text-white">{selectedWallet.address}</p>
+                <p className="mt-2 break-all font-mono text-sm text-white">{selectedWallet?.address}</p>
+                {selectedWallet?.instructions && (
+                  <p className="mt-3 text-xs text-zinc-400">{selectedWallet.instructions}</p>
+                )}
               </div>
 
               <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center">

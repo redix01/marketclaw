@@ -5,6 +5,7 @@ namespace App\Support\Api;
 use App\Models\LedgerEntry;
 use App\Models\Order;
 use App\Models\PaperAccount;
+use App\Models\PaymentMethod;
 use App\Models\Position;
 use App\Models\User;
 use App\Models\UserPreference;
@@ -123,6 +124,20 @@ class FrontendPayload
             'meta' => $entry->meta ?? [],
             'created_at' => optional($entry->created_at)->toISOString(),
             'updated_at' => optional($entry->updated_at)->toISOString(),
+        ];
+    }
+
+    public static function paymentMethod(PaymentMethod $method): array
+    {
+        return [
+            'id' => $method->id,
+            'name' => $method->name,
+            'network' => $method->network,
+            'address' => $method->address,
+            'instructions' => $method->instructions,
+            'is_active' => $method->is_active,
+            'created_at' => optional($method->created_at)->toISOString(),
+            'updated_at' => optional($method->updated_at)->toISOString(),
         ];
     }
 }

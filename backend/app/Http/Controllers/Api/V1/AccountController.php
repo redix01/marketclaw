@@ -5,13 +5,16 @@ namespace App\Http\Controllers\Api\V1;
 use App\Domain\Accounts\Actions\EnsurePaperAccount;
 use App\Domain\Accounts\Actions\WithdrawFunds;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Api\V1\DepositFundsRequest;
+use App\Http\Requests\Api\V1\DepositRequestStoreRequest;
 use App\Http\Requests\Api\V1\WithdrawFundsRequest;
 use App\Mail\DepositProofSubmitted;
+use App\Models\DepositRequest;
+use App\Models\PaymentMethod;
 use App\Models\User;
 use App\Support\Api\FrontendPayload;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
 
 class AccountController extends Controller
 {
@@ -25,25 +28,41 @@ class AccountController extends Controller
     }
 
     public function deposit(
-        DepositFundsRequest $request,
+        DepositRequestStoreRequest $request,
         User $user,
         EnsurePaperAccount $ensurePaperAccount,
     ): JsonResponse {
         $account = $ensurePaperAccount->handle($user);
         $validated = $request->validated();
         $proofFile = $request->file('proof_file');
+        $paymentMethod = PaymentMethod::query()->where('is_active', true)->findOrFail($validated['payment_method_id']);
+        $proofPath = $proofFile->store('deposit-proofs', 'local');
         $adminEmail = (string) config('services.admin_notification_email');
+
+        $depositRequest = DepositRequest::query()->create([
+            'user_id' => $user->id,
+            'payment_method_id' => $paymentMethod->id,
+            'amount' => (float) $validated['amount'],
+            'wallet_name' => $paymentMethod->name,
+            'wallet_network' => $paymentMethod->network,
+            'wallet_address' => $paymentMethod->address,
+            'transaction_reference' => $validated['transaction_reference'] ?? null,
+            'notes' => $validated['notes'] ?? null,
+            'proof_path' => $proofPath,
+            'proof_original_name' => $proofFile->getClientOriginalName(),
+            'status' => 'pending',
+        ]);
 
         Mail::to($adminEmail)->send(new DepositProofSubmitted(
             user: $user,
             amount: (float) $validated['amount'],
-            walletName: $validated['wallet_name'],
-            walletNetwork: $validated['wallet_network'],
-            walletAddress: $validated['wallet_address'],
+            walletName: $paymentMethod->name,
+            walletNetwork: $paymentMethod->network ?? '',
+            walletAddress: $paymentMethod->address,
             transactionReference: $validated['transaction_reference'] ?? null,
             notes: $validated['notes'] ?? null,
             currentCashBalance: (float) $account->cash_balance,
-            proofPath: $proofFile->getRealPath(),
+            proofPath: Storage::disk('local')->path($proofPath),
             proofOriginalName: $proofFile->getClientOriginalName(),
             proofMimeType: $proofFile->getMimeType() ?: 'application/octet-stream',
         ));
@@ -51,6 +70,7 @@ class AccountController extends Controller
         return response()->json([
             'message' => 'Deposit request submitted successfully. An admin has been notified by email.',
             'data' => [
+                'deposit_request_id' => $depositRequest->id,
                 'account' => FrontendPayload::account($account),
             ],
         ], 201);

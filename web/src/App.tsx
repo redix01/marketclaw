@@ -5,6 +5,9 @@ import { authService } from './services/authService';
 import { useTradingData } from './hooks/useTradingData';
 import Layout from './components/Layout';
 import Auth from './components/Auth';
+import AdminAuth from './components/AdminAuth';
+import AdminConsole from './components/AdminConsole';
+import AdminLayout from './components/AdminLayout';
 import Dashboard from './components/Dashboard';
 import Portfolio from './components/Portfolio';
 import Assets from './components/Assets';
@@ -15,9 +18,15 @@ import LandingPage from './components/LandingPage';
 
 const APP_TABS = ['overview', 'portfolio', 'ai-trader', 'wallet', 'settings'] as const;
 type AppTab = (typeof APP_TABS)[number];
+const ADMIN_TABS = ['dashboard', 'users', 'transactions', 'payment-methods', 'trades', 'settings'] as const;
+type AdminTab = (typeof ADMIN_TABS)[number];
 
 function normalizeTab(tab?: string): AppTab {
   return APP_TABS.includes((tab ?? '') as AppTab) ? (tab as AppTab) : 'overview';
+}
+
+function normalizeAdminTab(tab?: string): AdminTab {
+  return ADMIN_TABS.includes((tab ?? '') as AdminTab) ? (tab as AdminTab) : 'dashboard';
 }
 
 function LoadingScreen() {
@@ -25,6 +34,39 @@ function LoadingScreen() {
     <div className="min-h-screen bg-[#0A0A0B] flex items-center justify-center">
       <div className="w-12 h-12 border-4 border-yellow-500/20 border-t-yellow-500 rounded-full animate-spin"></div>
     </div>
+  );
+}
+
+function AdminShell({
+  user,
+}: {
+  user: any;
+}) {
+  const { tab } = useParams();
+  const activeTab = normalizeAdminTab(tab);
+
+  return (
+    <AdminLayout
+      activeTab={activeTab}
+      user={user}
+      onLogout={() => {
+        void authService.logout().then(() => {
+          window.location.href = '/admin/login';
+        });
+      }}
+    >
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={activeTab}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          transition={{ duration: 0.2 }}
+        >
+          <AdminConsole tab={activeTab} />
+        </motion.div>
+      </AnimatePresence>
+    </AdminLayout>
   );
 }
 
@@ -153,7 +195,7 @@ function AppRoutes({
         element={
           <LandingPage
             user={user}
-            onLaunchApp={() => navigate(user ? '/app/overview' : '/auth')}
+            onLaunchApp={() => navigate(user ? (user.is_admin ? '/admin/dashboard' : '/app/overview') : '/auth')}
             onViewDemo={() => {
               setIsGuest(true);
               navigate('/demo/overview');
@@ -165,7 +207,7 @@ function AppRoutes({
         path="/auth"
         element={
           user ? (
-            <Navigate to="/app/overview" replace />
+            <Navigate to={user.is_admin ? '/admin/dashboard' : '/app/overview'} replace />
           ) : (
             <Auth
               onAuthenticated={(session) => {
@@ -174,10 +216,46 @@ function AppRoutes({
                   displayName: session.user.name,
                   email: session.user.email,
                   photoURL: session.user.avatar_url ?? null,
+                  is_admin: session.user.is_admin ?? false,
                 });
-                navigate('/app/overview', { replace: true });
+                navigate(session.user.is_admin ? '/admin/dashboard' : '/app/overview', { replace: true });
               }}
             />
+          )
+        }
+      />
+      <Route
+        path="/admin"
+        element={user?.is_admin ? <Navigate to="/admin/dashboard" replace /> : <Navigate to="/admin/login" replace />}
+      />
+      <Route
+        path="/admin/login"
+        element={
+          user?.is_admin ? (
+            <Navigate to="/admin/dashboard" replace />
+          ) : (
+            <AdminAuth
+              onAuthenticated={(session) => {
+                setUser({
+                  uid: String(session.user.id),
+                  displayName: session.user.name,
+                  email: session.user.email,
+                  photoURL: session.user.avatar_url ?? null,
+                  is_admin: session.user.is_admin ?? false,
+                });
+                navigate('/admin/dashboard', { replace: true });
+              }}
+            />
+          )
+        }
+      />
+      <Route
+        path="/admin/:tab"
+        element={
+          user?.is_admin ? (
+            <AdminShell user={user} />
+          ) : (
+            <Navigate to="/admin/login" replace state={{ from: location }} />
           )
         }
       />
@@ -272,6 +350,7 @@ export default function App() {
           displayName: session.user.name,
           email: session.user.email,
           photoURL: session.user.avatar_url ?? null,
+          is_admin: session.user.is_admin ?? false,
         });
       } else {
         setUser(null);

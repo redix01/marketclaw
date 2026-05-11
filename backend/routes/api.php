@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\V1\LedgerController;
 use App\Http\Controllers\Api\V1\MarketController;
 use App\Http\Controllers\Api\V1\MeController;
 use App\Http\Controllers\Api\V1\OrderController;
+use App\Http\Controllers\Api\V1\PaymentMethodController;
 use App\Http\Controllers\Api\V1\PreferenceController;
 use App\Http\Controllers\Api\V1\PositionController;
 use Illuminate\Support\Facades\Route;
@@ -19,6 +20,7 @@ Route::prefix('v1')->group(function (): void {
     Route::post('/auth/register', [AuthController::class, 'register']);
     Route::post('/auth/login', [AuthController::class, 'login']);
     Route::get('/markets/symbols', [MarketController::class, 'symbols']);
+    Route::get('/payment-methods', [PaymentMethodController::class, 'index']);
 
     Route::post('/auth/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
 
@@ -44,3 +46,5 @@ Route::prefix('v1')->group(function (): void {
         Route::post('/bot/stop', [BotController::class, 'stop']);
     });
 });
+
+require __DIR__.'/admin.php';

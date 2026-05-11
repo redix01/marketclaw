@@ -1,5 +1,5 @@
 import { MOCK_SYMBOLS } from '../constants';
-import { Account, Agent, AssetType, OrderSide, Position } from '../types';
+import { Account, Agent, AssetType, OrderSide, PaymentMethod, Position } from '../types';
 import { apiFetch, emitTradingDataChanged } from './api';
 
 type SymbolRecord = {
@@ -76,6 +76,11 @@ export const tradingService = {
       totalWithdrawals: response.data.total_withdrawals,
       updatedAt: response.data.updated_at,
     };
+  },
+
+  async getPaymentMethods(): Promise<PaymentMethod[]> {
+    const response = await apiFetch<{ data: PaymentMethod[] }>('/payment-methods');
+    return response.data;
   },
 
   async tickAgent(_agent: Agent, _positions: Position[]) {

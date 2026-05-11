@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\ApiCors;
 use App\Http\Middleware\EnsureAuthenticatedUserMatchesRoute;
+use App\Http\Middleware\EnsureUserIsAdmin;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -17,6 +18,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->append(ApiCors::class);
         $middleware->alias([
             'auth.user' => EnsureAuthenticatedUserMatchesRoute::class,
+            'admin' => EnsureUserIsAdmin::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

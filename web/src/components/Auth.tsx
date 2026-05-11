@@ -4,7 +4,7 @@ import { authService } from '../services/authService';
 import { ApiError } from '../services/api';
 
 interface AuthProps {
-  onAuthenticated: (session: { user: { id: number; name: string; email: string; avatar_url?: string | null } }) => void;
+  onAuthenticated: (session: { user: { id: number; name: string; email: string; avatar_url?: string | null; status?: string; is_admin?: boolean } }) => void;
 }
 
 export default function Auth({ onAuthenticated }: AuthProps) {

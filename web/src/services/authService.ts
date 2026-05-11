@@ -8,6 +8,8 @@ type AuthResponse = {
       name: string;
       email: string;
       avatar_url?: string | null;
+      status?: string;
+      is_admin?: boolean;
     };
   };
 };
@@ -19,6 +21,21 @@ export const authService = {
 
   async login(email: string, password: string) {
     const response = await apiFetch<AuthResponse>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+
+    const session: SessionPayload = {
+      token: response.data.token,
+      user: response.data.user,
+    };
+
+    setStoredSession(session);
+    return session;
+  },
+
+  async loginAdmin(email: string, password: string) {
+    const response = await apiFetch<AuthResponse>('/admin/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     });
@@ -60,7 +77,11 @@ export const authService = {
     }
 
     try {
-      await apiFetch(`/users/${session.user.id}/me`);
+      if (session.user.is_admin) {
+        await apiFetch('/admin/me');
+      } else {
+        await apiFetch(`/users/${session.user.id}/me`);
+      }
       return session;
     } catch {
       setStoredSession(null);

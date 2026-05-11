@@ -7,6 +7,8 @@ export interface SessionUser {
   name: string;
   email: string;
   avatar_url?: string | null;
+  status?: string;
+  is_admin?: boolean;
 }
 
 export interface SessionPayload {

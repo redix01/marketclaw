@@ -8,9 +8,15 @@ use Illuminate\Validation\ValidationException;
 
 class WithdrawFunds
 {
-    public function handle(PaperAccount $account, float $amount, string $description = 'Manual withdrawal'): PaperAccount
+    public function handle(
+        PaperAccount $account,
+        float $amount,
+        string $description = 'Manual withdrawal',
+        string $source = 'api',
+        array $meta = [],
+    ): PaperAccount
     {
-        DB::transaction(function () use ($account, $amount, $description): void {
+        DB::transaction(function () use ($account, $amount, $description, $source, $meta): void {
             $account->refresh();
 
             if ((float) $account->cash_balance < $amount) {
@@ -29,9 +35,9 @@ class WithdrawFunds
                 'type' => 'withdrawal',
                 'amount' => -$amount,
                 'description' => $description,
-                'meta' => [
-                    'source' => 'api',
-                ],
+                'meta' => array_merge([
+                    'source' => $source,
+                ], $meta),
             ]);
         });
 
