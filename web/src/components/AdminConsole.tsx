@@ -80,8 +80,8 @@ export default function AdminConsole({ tab }: AdminConsoleProps) {
   const [editingUserId, setEditingUserId] = useState<number | null>(null);
   const [editingTransactionId, setEditingTransactionId] = useState<number | null>(null);
   const [editingPaymentMethodId, setEditingPaymentMethodId] = useState<number | null>(null);
+  const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
   const [isPaymentMethodModalOpen, setIsPaymentMethodModalOpen] = useState(false);
-  const [viewingPaymentMethod, setViewingPaymentMethod] = useState<PaymentMethod | null>(null);
   const [transactionTypeFilter, setTransactionTypeFilter] = useState<'deposit' | 'withdrawal'>('deposit');
   const [reviewNotes, setReviewNotes] = useState<Record<number, string>>({});
   const [quickAmounts, setQuickAmounts] = useState<Record<number, string>>({});
@@ -191,6 +191,7 @@ export default function AdminConsole({ tab }: AdminConsoleProps) {
       }
       setEditingTransactionId(null);
       setTransactionForm({ user_id: '', type: 'deposit', amount: '', description: '' });
+      setIsTransactionModalOpen(false);
       await load();
     } catch (err: any) {
       setError(err.message || 'Unable to save transaction.');
@@ -252,9 +253,27 @@ export default function AdminConsole({ tab }: AdminConsoleProps) {
     setIsPaymentMethodModalOpen(true);
   };
 
+  const openCreateTransactionModal = () => {
+    resetFlash();
+    setEditingTransactionId(null);
+    setTransactionForm({ user_id: '', type: 'deposit', amount: '', description: '' });
+    setIsTransactionModalOpen(true);
+  };
+
+  const openEditTransactionModal = (transaction: AdminTransaction) => {
+    resetFlash();
+    setEditingTransactionId(transaction.id);
+    setTransactionForm({
+      user_id: transaction.user_id,
+      type: transaction.type,
+      amount: transaction.amount,
+      description: transaction.description,
+    });
+    setIsTransactionModalOpen(true);
+  };
+
   const openEditPaymentMethodModal = (method: PaymentMethod) => {
     resetFlash();
-    setViewingPaymentMethod(null);
     setEditingPaymentMethodId(method.id);
     setPaymentMethodForm({
       name: method.name,
@@ -276,9 +295,6 @@ export default function AdminConsole({ tab }: AdminConsoleProps) {
     try {
       await adminService.deletePaymentMethod(method.id);
       setSuccess('Payment method deleted successfully.');
-      if (viewingPaymentMethod?.id === method.id) {
-        setViewingPaymentMethod(null);
-      }
       await load();
     } catch (err: any) {
       setError(err.message || 'Unable to delete payment method.');
@@ -292,7 +308,7 @@ export default function AdminConsole({ tab }: AdminConsoleProps) {
     resetFlash();
     try {
       const nextActiveState = !method.is_active;
-      const updated = await adminService.updatePaymentMethod(method.id, {
+      await adminService.updatePaymentMethod(method.id, {
         name: method.name,
         network: method.network || '',
         address: method.address,
@@ -300,9 +316,6 @@ export default function AdminConsole({ tab }: AdminConsoleProps) {
         is_active: nextActiveState,
       });
       setSuccess(nextActiveState ? 'Payment method activated successfully.' : 'Payment method deactivated successfully.');
-      if (viewingPaymentMethod?.id === method.id) {
-        setViewingPaymentMethod(updated);
-      }
       await load();
     } catch (err: any) {
       setError(err.message || 'Unable to update payment method status.');
@@ -465,49 +478,37 @@ export default function AdminConsole({ tab }: AdminConsoleProps) {
             </div>
           </SectionCard>
 
-          <div className="grid gap-6 xl:grid-cols-[380px,1fr]">
-            <SectionCard title={editingTransactionId ? 'Edit Transaction' : 'Create Transaction'}>
-              <div className="space-y-3">
-                <select className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-3 text-sm" value={transactionForm.user_id} onChange={(e) => setTransactionForm({ ...transactionForm, user_id: Number(e.target.value) })}>
-                  <option value="">Select user</option>
-                  {userOptions.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
-                </select>
-                <select className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-3 text-sm" value={transactionForm.type} onChange={(e) => setTransactionForm({ ...transactionForm, type: e.target.value })}>
-                  <option value="deposit">deposit</option>
-                  <option value="withdrawal">withdrawal</option>
-                </select>
-                <input className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-3 text-sm" placeholder="Amount" type="number" value={transactionForm.amount} onChange={(e) => setTransactionForm({ ...transactionForm, amount: Number(e.target.value) })} />
-                <input className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-3 text-sm" placeholder="Description" value={transactionForm.description} onChange={(e) => setTransactionForm({ ...transactionForm, description: e.target.value })} />
-                <button className="w-full rounded-xl bg-yellow-500 px-4 py-3 text-sm font-bold text-black" disabled={saving} onClick={handleCreateOrUpdateTransaction}>
-                  {editingTransactionId ? 'Update Transaction' : 'Create Transaction'}
+          <SectionCard title="Deposit and Withdrawal Transactions">
+              <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    className={`rounded-xl px-4 py-3 text-sm font-bold transition ${
+                      transactionTypeFilter === 'deposit'
+                        ? 'bg-yellow-500 text-black'
+                        : 'border border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-white'
+                    }`}
+                    onClick={() => setTransactionTypeFilter('deposit')}
+                  >
+                    Deposits
+                  </button>
+                  <button
+                    className={`rounded-xl px-4 py-3 text-sm font-bold transition ${
+                      transactionTypeFilter === 'withdrawal'
+                        ? 'bg-yellow-500 text-black'
+                        : 'border border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-white'
+                    }`}
+                    onClick={() => setTransactionTypeFilter('withdrawal')}
+                  >
+                    Withdrawals
+                  </button>
+                </div>
+                <button
+                  className="rounded-xl bg-yellow-500 px-4 py-3 text-sm font-bold text-black transition hover:bg-yellow-400"
+                  onClick={openCreateTransactionModal}
+                >
+                  New Transaction
                 </button>
               </div>
-            </SectionCard>
-
-            <SectionCard title="Deposit and Withdrawal Transactions">
-              <div className="mb-5 flex flex-wrap gap-3">
-                <button
-                  className={`rounded-xl px-4 py-3 text-sm font-bold transition ${
-                    transactionTypeFilter === 'deposit'
-                      ? 'bg-yellow-500 text-black'
-                      : 'border border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-white'
-                  }`}
-                  onClick={() => setTransactionTypeFilter('deposit')}
-                >
-                  Deposits
-                </button>
-                <button
-                  className={`rounded-xl px-4 py-3 text-sm font-bold transition ${
-                    transactionTypeFilter === 'withdrawal'
-                      ? 'bg-yellow-500 text-black'
-                      : 'border border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-white'
-                  }`}
-                  onClick={() => setTransactionTypeFilter('withdrawal')}
-                >
-                  Withdrawals
-                </button>
-              </div>
-
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
                   <thead>
@@ -537,7 +538,7 @@ export default function AdminConsole({ tab }: AdminConsoleProps) {
                           <div className="flex gap-2">
                             {row.editable && (
                               <>
-                                <button className="rounded-lg border border-zinc-700 px-3 py-2 text-xs font-bold text-zinc-200" onClick={() => { setEditingTransactionId(row.id); setTransactionForm({ user_id: row.user_id, type: row.type, amount: row.amount, description: row.description }); }}>Edit</button>
+                                <button className="rounded-lg border border-zinc-700 px-3 py-2 text-xs font-bold text-zinc-200" onClick={() => openEditTransactionModal(row)}>Edit</button>
                                 <button className="rounded-lg border border-rose-500/30 px-3 py-2 text-xs font-bold text-rose-300" onClick={async () => { await adminService.deleteTransaction(row.id); await load(); }}>Delete</button>
                               </>
                             )}
@@ -549,7 +550,48 @@ export default function AdminConsole({ tab }: AdminConsoleProps) {
                 </table>
               </div>
             </SectionCard>
-          </div>
+
+          <Modal
+            title={editingTransactionId ? 'Edit Transaction' : 'Create Transaction'}
+            open={isTransactionModalOpen}
+            onClose={() => {
+              if (saving) {
+                return;
+              }
+              setIsTransactionModalOpen(false);
+              setEditingTransactionId(null);
+              setTransactionForm({ user_id: '', type: 'deposit', amount: '', description: '' });
+            }}
+          >
+            <div className="space-y-3">
+              <select className="w-full rounded-xl border border-zinc-800 bg-zinc-900/50 px-4 py-3 text-sm" value={transactionForm.user_id} onChange={(e) => setTransactionForm({ ...transactionForm, user_id: Number(e.target.value) })}>
+                <option value="">Select user</option>
+                {userOptions.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+              </select>
+              <select className="w-full rounded-xl border border-zinc-800 bg-zinc-900/50 px-4 py-3 text-sm" value={transactionForm.type} onChange={(e) => setTransactionForm({ ...transactionForm, type: e.target.value })}>
+                <option value="deposit">deposit</option>
+                <option value="withdrawal">withdrawal</option>
+              </select>
+              <input className="w-full rounded-xl border border-zinc-800 bg-zinc-900/50 px-4 py-3 text-sm" placeholder="Amount" type="number" value={transactionForm.amount} onChange={(e) => setTransactionForm({ ...transactionForm, amount: Number(e.target.value) })} />
+              <input className="w-full rounded-xl border border-zinc-800 bg-zinc-900/50 px-4 py-3 text-sm" placeholder="Description" value={transactionForm.description} onChange={(e) => setTransactionForm({ ...transactionForm, description: e.target.value })} />
+              <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:justify-end">
+                <button
+                  className="rounded-xl border border-zinc-700 px-4 py-3 text-sm font-bold text-zinc-300"
+                  disabled={saving}
+                  onClick={() => {
+                    setIsTransactionModalOpen(false);
+                    setEditingTransactionId(null);
+                    setTransactionForm({ user_id: '', type: 'deposit', amount: '', description: '' });
+                  }}
+                >
+                  Cancel
+                </button>
+                <button className="rounded-xl bg-yellow-500 px-5 py-3 text-sm font-bold text-black" disabled={saving} onClick={handleCreateOrUpdateTransaction}>
+                  {editingTransactionId ? 'Update Transaction' : 'Create Transaction'}
+                </button>
+              </div>
+            </div>
+          </Modal>
         </div>
       )}
 
@@ -600,7 +642,7 @@ export default function AdminConsole({ tab }: AdminConsoleProps) {
                         <p className="break-all font-mono text-xs text-zinc-300">{method.address}</p>
                       </td>
                       <td className="px-5 py-4 text-sm text-zinc-400">
-                        <p className="line-clamp-2">{method.instructions || 'No instructions'}</p>
+                        <p className="line-clamp-2 pr-3">{method.instructions || 'No instructions'}</p>
                       </td>
                       <td className="px-5 py-4">
                         <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] ${method.is_active ? 'bg-yellow-500/10 text-yellow-400' : 'bg-zinc-800 text-zinc-400'}`}>
@@ -608,31 +650,27 @@ export default function AdminConsole({ tab }: AdminConsoleProps) {
                         </span>
                       </td>
                       <td className="px-5 py-4">
-                        <div className="flex flex-wrap justify-end gap-2">
-                          <button
-                            className="rounded-lg border border-zinc-700 px-3 py-2 text-xs font-bold text-zinc-200 transition hover:border-zinc-500 hover:text-white"
-                            onClick={() => setViewingPaymentMethod(method)}
-                          >
-                            View
-                          </button>
-                          <button
-                            className="rounded-lg border border-zinc-700 px-3 py-2 text-xs font-bold text-zinc-200 transition hover:border-zinc-500 hover:text-white"
-                            onClick={() => openEditPaymentMethodModal(method)}
-                          >
-                            Edit
-                          </button>
-                          <button
-                            className="rounded-lg border border-yellow-500/30 px-3 py-2 text-xs font-bold text-yellow-300 transition hover:border-yellow-400 hover:text-yellow-200"
-                            onClick={() => void handleTogglePaymentMethodStatus(method)}
-                          >
-                            {method.is_active ? 'Disable' : 'Enable'}
-                          </button>
-                          <button
-                            className="rounded-lg border border-rose-500/30 px-3 py-2 text-xs font-bold text-rose-300 transition hover:border-rose-400 hover:text-rose-200"
-                            onClick={() => void handleDeletePaymentMethod(method)}
-                          >
-                            Delete
-                          </button>
+                        <div className="flex justify-end">
+                          <div className="inline-flex items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-950/70 p-1.5">
+                            <button
+                              className="rounded-lg border border-zinc-700 px-3 py-2 text-xs font-bold text-zinc-200 transition hover:border-zinc-500 hover:text-white"
+                              onClick={() => openEditPaymentMethodModal(method)}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              className="rounded-lg border border-yellow-500/30 px-3 py-2 text-xs font-bold text-yellow-300 transition hover:border-yellow-400 hover:text-yellow-200"
+                              onClick={() => void handleTogglePaymentMethodStatus(method)}
+                            >
+                              {method.is_active ? 'Disable' : 'Enable'}
+                            </button>
+                            <button
+                              className="rounded-lg border border-rose-500/30 px-3 py-2 text-xs font-bold text-rose-300 transition hover:border-rose-400 hover:text-rose-200"
+                              onClick={() => void handleDeletePaymentMethod(method)}
+                            >
+                              Delete
+                            </button>
+                          </div>
                         </div>
                       </td>
                     </tr>
@@ -679,55 +717,6 @@ export default function AdminConsole({ tab }: AdminConsoleProps) {
                 </button>
               </div>
             </div>
-          </Modal>
-
-          <Modal
-            title="Payment Method Details"
-            open={!!viewingPaymentMethod}
-            onClose={() => setViewingPaymentMethod(null)}
-          >
-            {viewingPaymentMethod && (
-              <div className="space-y-5">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">Wallet</p>
-                    <p className="mt-2 text-base font-bold text-white">{viewingPaymentMethod.name}</p>
-                  </div>
-                  <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">Network</p>
-                    <p className="mt-2 text-base font-bold text-white">{viewingPaymentMethod.network || 'Default'}</p>
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">Wallet Address</p>
-                  <p className="mt-2 break-all font-mono text-sm text-zinc-200">{viewingPaymentMethod.address}</p>
-                </div>
-
-                <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">Instructions</p>
-                  <p className="mt-2 text-sm text-zinc-300">{viewingPaymentMethod.instructions || 'No instructions configured.'}</p>
-                </div>
-
-                <div className="flex flex-wrap justify-end gap-3">
-                  <button
-                    className="rounded-xl border border-zinc-700 px-4 py-3 text-sm font-bold text-zinc-300"
-                    onClick={() => {
-                      setViewingPaymentMethod(null);
-                      openEditPaymentMethodModal(viewingPaymentMethod);
-                    }}
-                  >
-                    Edit
-                  </button>
-                  <button
-                    className="rounded-xl border border-yellow-500/30 px-4 py-3 text-sm font-bold text-yellow-300"
-                    onClick={() => void handleTogglePaymentMethodStatus(viewingPaymentMethod)}
-                  >
-                    {viewingPaymentMethod.is_active ? 'Disable' : 'Enable'}
-                  </button>
-                </div>
-              </div>
-            )}
           </Modal>
         </>
       )}
