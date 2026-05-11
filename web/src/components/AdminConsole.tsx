@@ -27,6 +27,39 @@ function StatCard({ label, value }: { label: string; value: string | number }) {
   );
 }
 
+function Modal({
+  title,
+  open,
+  onClose,
+  children,
+}: {
+  title: string;
+  open: boolean;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  if (!open) {
+    return null;
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-sm">
+      <div className="w-full max-w-2xl rounded-3xl border border-zinc-800 bg-[#0F0F11] shadow-2xl shadow-black/40">
+        <div className="flex items-center justify-between border-b border-zinc-800 px-6 py-5">
+          <h3 className="text-lg font-bold text-white">{title}</h3>
+          <button
+            className="rounded-xl border border-zinc-700 px-3 py-2 text-xs font-bold text-zinc-300 transition hover:border-zinc-500 hover:text-white"
+            onClick={onClose}
+          >
+            Close
+          </button>
+        </div>
+        <div className="max-h-[80vh] overflow-y-auto p-6">{children}</div>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminConsole({ tab }: AdminConsoleProps) {
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [recentDepositRequests, setRecentDepositRequests] = useState<DepositRequestRow[]>([]);
@@ -47,6 +80,9 @@ export default function AdminConsole({ tab }: AdminConsoleProps) {
   const [editingUserId, setEditingUserId] = useState<number | null>(null);
   const [editingTransactionId, setEditingTransactionId] = useState<number | null>(null);
   const [editingPaymentMethodId, setEditingPaymentMethodId] = useState<number | null>(null);
+  const [isPaymentMethodModalOpen, setIsPaymentMethodModalOpen] = useState(false);
+  const [viewingPaymentMethod, setViewingPaymentMethod] = useState<PaymentMethod | null>(null);
+  const [transactionTypeFilter, setTransactionTypeFilter] = useState<'deposit' | 'withdrawal'>('deposit');
   const [reviewNotes, setReviewNotes] = useState<Record<number, string>>({});
   const [quickAmounts, setQuickAmounts] = useState<Record<number, string>>({});
 
@@ -176,6 +212,7 @@ export default function AdminConsole({ tab }: AdminConsoleProps) {
       }
       setEditingPaymentMethodId(null);
       setPaymentMethodForm({ name: '', network: '', address: '', instructions: '', is_active: true });
+      setIsPaymentMethodModalOpen(false);
       await load();
     } catch (err: any) {
       setError(err.message || 'Unable to save payment method.');
@@ -202,6 +239,77 @@ export default function AdminConsole({ tab }: AdminConsoleProps) {
     () => users.map((row) => ({ id: row.user.id, label: `${row.user.name} (${row.user.email})` })),
     [users]
   );
+
+  const filteredTransactions = useMemo(
+    () => transactions.filter((row) => row.type === transactionTypeFilter),
+    [transactionTypeFilter, transactions]
+  );
+
+  const openCreatePaymentMethodModal = () => {
+    resetFlash();
+    setEditingPaymentMethodId(null);
+    setPaymentMethodForm({ name: '', network: '', address: '', instructions: '', is_active: true });
+    setIsPaymentMethodModalOpen(true);
+  };
+
+  const openEditPaymentMethodModal = (method: PaymentMethod) => {
+    resetFlash();
+    setViewingPaymentMethod(null);
+    setEditingPaymentMethodId(method.id);
+    setPaymentMethodForm({
+      name: method.name,
+      network: method.network || '',
+      address: method.address,
+      instructions: method.instructions || '',
+      is_active: !!method.is_active,
+    });
+    setIsPaymentMethodModalOpen(true);
+  };
+
+  const handleDeletePaymentMethod = async (method: PaymentMethod) => {
+    if (!window.confirm(`Delete payment method "${method.name}"?`)) {
+      return;
+    }
+
+    setSaving(true);
+    resetFlash();
+    try {
+      await adminService.deletePaymentMethod(method.id);
+      setSuccess('Payment method deleted successfully.');
+      if (viewingPaymentMethod?.id === method.id) {
+        setViewingPaymentMethod(null);
+      }
+      await load();
+    } catch (err: any) {
+      setError(err.message || 'Unable to delete payment method.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleTogglePaymentMethodStatus = async (method: PaymentMethod) => {
+    setSaving(true);
+    resetFlash();
+    try {
+      const nextActiveState = !method.is_active;
+      const updated = await adminService.updatePaymentMethod(method.id, {
+        name: method.name,
+        network: method.network || '',
+        address: method.address,
+        instructions: method.instructions || '',
+        is_active: nextActiveState,
+      });
+      setSuccess(nextActiveState ? 'Payment method activated successfully.' : 'Payment method deactivated successfully.');
+      if (viewingPaymentMethod?.id === method.id) {
+        setViewingPaymentMethod(updated);
+      }
+      await load();
+    } catch (err: any) {
+      setError(err.message || 'Unable to update payment method status.');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (loading) {
     return <div className="rounded-3xl border border-zinc-800 bg-[#0F0F11] p-10 text-sm text-zinc-400">Loading admin data...</div>;
@@ -377,6 +485,29 @@ export default function AdminConsole({ tab }: AdminConsoleProps) {
             </SectionCard>
 
             <SectionCard title="Deposit and Withdrawal Transactions">
+              <div className="mb-5 flex flex-wrap gap-3">
+                <button
+                  className={`rounded-xl px-4 py-3 text-sm font-bold transition ${
+                    transactionTypeFilter === 'deposit'
+                      ? 'bg-yellow-500 text-black'
+                      : 'border border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-white'
+                  }`}
+                  onClick={() => setTransactionTypeFilter('deposit')}
+                >
+                  Deposits
+                </button>
+                <button
+                  className={`rounded-xl px-4 py-3 text-sm font-bold transition ${
+                    transactionTypeFilter === 'withdrawal'
+                      ? 'bg-yellow-500 text-black'
+                      : 'border border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-white'
+                  }`}
+                  onClick={() => setTransactionTypeFilter('withdrawal')}
+                >
+                  Withdrawals
+                </button>
+              </div>
+
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
                   <thead>
@@ -389,7 +520,14 @@ export default function AdminConsole({ tab }: AdminConsoleProps) {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-800/50">
-                    {transactions.map((row) => (
+                    {filteredTransactions.length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="py-8 text-center text-sm text-zinc-500">
+                          No {transactionTypeFilter} transactions found.
+                        </td>
+                      </tr>
+                    )}
+                    {filteredTransactions.map((row) => (
                       <tr key={row.id}>
                         <td className="py-3 text-sm">{row.user_name}<div className="text-xs text-zinc-500">{row.user_email}</div></td>
                         <td className="py-3 text-sm capitalize">{row.type}</td>
@@ -416,45 +554,182 @@ export default function AdminConsole({ tab }: AdminConsoleProps) {
       )}
 
       {tab === 'payment-methods' && (
-        <div className="grid gap-6 xl:grid-cols-[380px,1fr]">
-          <SectionCard title={editingPaymentMethodId ? 'Edit Payment Method' : 'Add Payment Method'}>
+        <>
+          <SectionCard title="Payment Methods">
+            <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm text-zinc-400">Manage wallet names, networks, receiving addresses, and availability from one table.</p>
+              </div>
+              <button
+                className="rounded-xl bg-yellow-500 px-4 py-3 text-sm font-bold text-black transition hover:bg-yellow-400"
+                onClick={openCreatePaymentMethodModal}
+              >
+                Add Wallet
+              </button>
+            </div>
+
+            <div className="overflow-x-auto rounded-2xl border border-zinc-800">
+              <table className="min-w-[920px] w-full table-fixed text-left">
+                <thead className="bg-zinc-900/60">
+                  <tr className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 font-bold">
+                    <th className="w-[18%] px-5 py-4">Wallet</th>
+                    <th className="w-[14%] px-5 py-4">Network</th>
+                    <th className="w-[32%] px-5 py-4">Address</th>
+                    <th className="w-[18%] px-5 py-4">Instructions</th>
+                    <th className="w-[8%] px-5 py-4">Status</th>
+                    <th className="w-[10%] px-5 py-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-800 bg-zinc-900/20">
+                  {paymentMethods.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="px-5 py-10 text-center text-sm text-zinc-500">
+                        No payment methods added yet.
+                      </td>
+                    </tr>
+                  )}
+                  {paymentMethods.map((method) => (
+                    <tr key={method.id} className="align-top">
+                      <td className="px-5 py-4">
+                        <p className="text-sm font-bold text-white">{method.name}</p>
+                      </td>
+                      <td className="px-5 py-4 text-sm text-zinc-300">
+                        {method.network || 'Default'}
+                      </td>
+                      <td className="px-5 py-4">
+                        <p className="break-all font-mono text-xs text-zinc-300">{method.address}</p>
+                      </td>
+                      <td className="px-5 py-4 text-sm text-zinc-400">
+                        <p className="line-clamp-2">{method.instructions || 'No instructions'}</p>
+                      </td>
+                      <td className="px-5 py-4">
+                        <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] ${method.is_active ? 'bg-yellow-500/10 text-yellow-400' : 'bg-zinc-800 text-zinc-400'}`}>
+                          {method.is_active ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="flex flex-wrap justify-end gap-2">
+                          <button
+                            className="rounded-lg border border-zinc-700 px-3 py-2 text-xs font-bold text-zinc-200 transition hover:border-zinc-500 hover:text-white"
+                            onClick={() => setViewingPaymentMethod(method)}
+                          >
+                            View
+                          </button>
+                          <button
+                            className="rounded-lg border border-zinc-700 px-3 py-2 text-xs font-bold text-zinc-200 transition hover:border-zinc-500 hover:text-white"
+                            onClick={() => openEditPaymentMethodModal(method)}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            className="rounded-lg border border-yellow-500/30 px-3 py-2 text-xs font-bold text-yellow-300 transition hover:border-yellow-400 hover:text-yellow-200"
+                            onClick={() => void handleTogglePaymentMethodStatus(method)}
+                          >
+                            {method.is_active ? 'Disable' : 'Enable'}
+                          </button>
+                          <button
+                            className="rounded-lg border border-rose-500/30 px-3 py-2 text-xs font-bold text-rose-300 transition hover:border-rose-400 hover:text-rose-200"
+                            onClick={() => void handleDeletePaymentMethod(method)}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </SectionCard>
+          <Modal
+            title={editingPaymentMethodId ? 'Edit Payment Method' : 'Add Payment Method'}
+            open={isPaymentMethodModalOpen}
+            onClose={() => {
+              if (saving) {
+                return;
+              }
+              setIsPaymentMethodModalOpen(false);
+              setEditingPaymentMethodId(null);
+              setPaymentMethodForm({ name: '', network: '', address: '', instructions: '', is_active: true });
+            }}
+          >
             <div className="space-y-3">
-              <input className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-3 text-sm" placeholder="Wallet name" value={paymentMethodForm.name} onChange={(e) => setPaymentMethodForm({ ...paymentMethodForm, name: e.target.value })} />
-              <input className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-3 text-sm" placeholder="Network" value={paymentMethodForm.network} onChange={(e) => setPaymentMethodForm({ ...paymentMethodForm, network: e.target.value })} />
-              <input className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-3 text-sm" placeholder="Wallet address" value={paymentMethodForm.address} onChange={(e) => setPaymentMethodForm({ ...paymentMethodForm, address: e.target.value })} />
-              <textarea className="w-full min-h-24 bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-3 text-sm" placeholder="Instructions" value={paymentMethodForm.instructions} onChange={(e) => setPaymentMethodForm({ ...paymentMethodForm, instructions: e.target.value })} />
+              <input className="w-full rounded-xl border border-zinc-800 bg-zinc-900/50 px-4 py-3 text-sm" placeholder="Wallet name" value={paymentMethodForm.name} onChange={(e) => setPaymentMethodForm({ ...paymentMethodForm, name: e.target.value })} />
+              <input className="w-full rounded-xl border border-zinc-800 bg-zinc-900/50 px-4 py-3 text-sm" placeholder="Network" value={paymentMethodForm.network} onChange={(e) => setPaymentMethodForm({ ...paymentMethodForm, network: e.target.value })} />
+              <input className="w-full rounded-xl border border-zinc-800 bg-zinc-900/50 px-4 py-3 text-sm" placeholder="Wallet address" value={paymentMethodForm.address} onChange={(e) => setPaymentMethodForm({ ...paymentMethodForm, address: e.target.value })} />
+              <textarea className="min-h-28 w-full rounded-xl border border-zinc-800 bg-zinc-900/50 px-4 py-3 text-sm" placeholder="Instructions" value={paymentMethodForm.instructions} onChange={(e) => setPaymentMethodForm({ ...paymentMethodForm, instructions: e.target.value })} />
               <label className="flex items-center gap-2 text-sm text-zinc-300">
                 <input type="checkbox" checked={paymentMethodForm.is_active} onChange={(e) => setPaymentMethodForm({ ...paymentMethodForm, is_active: e.target.checked })} />
                 Active
               </label>
-              <button className="w-full rounded-xl bg-yellow-500 px-4 py-3 text-sm font-bold text-black" disabled={saving} onClick={handleCreateOrUpdatePaymentMethod}>
-                {editingPaymentMethodId ? 'Update Payment Method' : 'Create Payment Method'}
-              </button>
+              <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:justify-end">
+                <button
+                  className="rounded-xl border border-zinc-700 px-4 py-3 text-sm font-bold text-zinc-300"
+                  disabled={saving}
+                  onClick={() => {
+                    setIsPaymentMethodModalOpen(false);
+                    setEditingPaymentMethodId(null);
+                    setPaymentMethodForm({ name: '', network: '', address: '', instructions: '', is_active: true });
+                  }}
+                >
+                  Cancel
+                </button>
+                <button className="rounded-xl bg-yellow-500 px-5 py-3 text-sm font-bold text-black" disabled={saving} onClick={handleCreateOrUpdatePaymentMethod}>
+                  {editingPaymentMethodId ? 'Update Payment Method' : 'Create Payment Method'}
+                </button>
+              </div>
             </div>
-          </SectionCard>
+          </Modal>
 
-          <SectionCard title="Payment Methods">
-            <div className="space-y-4">
-              {paymentMethods.map((method) => (
-                <div key={method.id} className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
-                  <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-                    <div>
-                      <p className="font-bold text-white">{method.name}</p>
-                      <p className="text-sm text-zinc-400">{method.network || 'Default network'}</p>
-                      <p className="mt-2 break-all font-mono text-xs text-zinc-300">{method.address}</p>
-                      {method.instructions && <p className="mt-2 text-sm text-zinc-500">{method.instructions}</p>}
-                    </div>
-                    <div className="flex gap-2 items-center">
-                      <span className={`text-xs font-bold uppercase tracking-wider ${method.is_active ? 'text-yellow-400' : 'text-zinc-500'}`}>{method.is_active ? 'active' : 'inactive'}</span>
-                      <button className="rounded-lg border border-zinc-700 px-3 py-2 text-xs font-bold text-zinc-200" onClick={() => { setEditingPaymentMethodId(method.id); setPaymentMethodForm({ name: method.name, network: method.network || '', address: method.address, instructions: method.instructions || '', is_active: !!method.is_active }); }}>Edit</button>
-                      <button className="rounded-lg border border-rose-500/30 px-3 py-2 text-xs font-bold text-rose-300" onClick={async () => { await adminService.deletePaymentMethod(method.id); await load(); }}>Delete</button>
-                    </div>
+          <Modal
+            title="Payment Method Details"
+            open={!!viewingPaymentMethod}
+            onClose={() => setViewingPaymentMethod(null)}
+          >
+            {viewingPaymentMethod && (
+              <div className="space-y-5">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">Wallet</p>
+                    <p className="mt-2 text-base font-bold text-white">{viewingPaymentMethod.name}</p>
+                  </div>
+                  <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">Network</p>
+                    <p className="mt-2 text-base font-bold text-white">{viewingPaymentMethod.network || 'Default'}</p>
                   </div>
                 </div>
-              ))}
-            </div>
-          </SectionCard>
-        </div>
+
+                <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">Wallet Address</p>
+                  <p className="mt-2 break-all font-mono text-sm text-zinc-200">{viewingPaymentMethod.address}</p>
+                </div>
+
+                <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">Instructions</p>
+                  <p className="mt-2 text-sm text-zinc-300">{viewingPaymentMethod.instructions || 'No instructions configured.'}</p>
+                </div>
+
+                <div className="flex flex-wrap justify-end gap-3">
+                  <button
+                    className="rounded-xl border border-zinc-700 px-4 py-3 text-sm font-bold text-zinc-300"
+                    onClick={() => {
+                      setViewingPaymentMethod(null);
+                      openEditPaymentMethodModal(viewingPaymentMethod);
+                    }}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    className="rounded-xl border border-yellow-500/30 px-4 py-3 text-sm font-bold text-yellow-300"
+                    onClick={() => void handleTogglePaymentMethodStatus(viewingPaymentMethod)}
+                  >
+                    {viewingPaymentMethod.is_active ? 'Disable' : 'Enable'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </Modal>
+        </>
       )}
 
       {tab === 'trades' && (
