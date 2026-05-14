@@ -1,5 +1,5 @@
 import { MOCK_SYMBOLS } from '../constants';
-import { Account, Agent, AssetType, OrderSide, PaymentMethod, Position } from '../types';
+import { Account, Agent, AssetType, OrderSide, PaymentMethod, Position, TraderProfile, TraderUpgradeRequest } from '../types';
 import { apiFetch, emitTradingDataChanged } from './api';
 
 type SymbolRecord = {
@@ -117,6 +117,34 @@ export const tradingService = {
     return response.data.preferences;
   },
 
+  async getTraderProfiles(uid: string): Promise<TraderProfile[]> {
+    if (uid === 'guest-user') {
+      return [
+        {
+          id: 1,
+          asset_type: 'stock',
+          title: 'Stock AI Trader',
+          description: 'Tracks blue-chip and high-volatility equities; opens grid positions around technical levels.',
+          commission_percent: 20,
+          level: 1,
+          pending_upgrade_request: null,
+        },
+        {
+          id: 2,
+          asset_type: 'crypto',
+          title: 'Crypto AI Trader',
+          description: '24/7 grid agent on top crypto pairs — fractional sizing, faster cycles, deeper exposure ranges.',
+          commission_percent: 20,
+          level: 1,
+          pending_upgrade_request: null,
+        },
+      ];
+    }
+
+    const response = await apiFetch<{ data: TraderProfile[] }>(`/users/${uid}/trader-profiles`);
+    return response.data;
+  },
+
   async updatePreferences(uid: string, payload: Record<string, any>) {
     await this.checkGuest(uid);
     const response = await apiFetch<{ data: { preferences: any } }>(`/users/${uid}/preferences`, {
@@ -126,14 +154,14 @@ export const tradingService = {
     return response.data.preferences;
   },
 
-  async startBot(uid: string, assetType?: 'stock' | 'crypto' | null) {
+  async startBot(uid: string, assetType?: 'stock' | 'crypto' | null, mode: 'fresh' | 'resume' = 'fresh') {
     await this.checkGuest(uid);
-    const response = await apiFetch<{ data: { preferences: any } }>(`/users/${uid}/bot/start`, {
+    const response = await apiFetch<{ data: { preferences: any; session: { mode: 'fresh' | 'resume'; opened_positions_count: number; closed_positions_count: number; opened_symbols: string[] } } }>(`/users/${uid}/bot/start`, {
       method: 'POST',
-      body: JSON.stringify({ asset_type: assetType ?? null }),
+      body: JSON.stringify({ asset_type: assetType ?? null, mode }),
     });
     emitTradingDataChanged();
-    return response.data.preferences;
+    return response.data;
   },
 
   async stopBot(uid: string) {
@@ -167,5 +195,17 @@ export const tradingService = {
     });
 
     emitTradingDataChanged();
+  },
+
+  async requestTraderUpgrade(uid: string, payload: { asset_type: AssetType; requested_level: number; note?: string }) {
+    await this.checkGuest(uid);
+
+    const response = await apiFetch<{ data: TraderUpgradeRequest }>(`/users/${uid}/trader-upgrade-requests`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+
+    emitTradingDataChanged();
+    return response.data;
   },
 };

@@ -19,6 +19,7 @@ class SubmitMarketOrder
         ?float $submittedPrice = null,
         string $source = 'manual',
         ?int $agentId = null,
+        bool $forceSubmittedPrice = false,
     ): Order {
         if (! $symbol->is_active || ! $symbol->tradeable) {
             throw ValidationException::withMessages([
@@ -26,7 +27,7 @@ class SubmitMarketOrder
             ]);
         }
 
-        $price = $this->resolveExecutionPrice($symbol, $submittedPrice);
+        $price = $this->resolveExecutionPrice($symbol, $submittedPrice, $forceSubmittedPrice);
         $totalValue = round($price * $quantity, 8);
 
         return DB::transaction(function () use ($account, $symbol, $side, $quantity, $submittedPrice, $source, $agentId, $price, $totalValue): Order {
@@ -123,8 +124,12 @@ class SubmitMarketOrder
         });
     }
 
-    protected function resolveExecutionPrice(Symbol $symbol, ?float $submittedPrice): float
+    protected function resolveExecutionPrice(Symbol $symbol, ?float $submittedPrice, bool $forceSubmittedPrice = false): float
     {
+        if ($forceSubmittedPrice && $submittedPrice !== null && $submittedPrice > 0) {
+            return $submittedPrice;
+        }
+
         $latestQuote = $symbol->latestQuote()->first();
 
         if ($latestQuote) {
@@ -161,6 +166,8 @@ class SubmitMarketOrder
                 'average_entry_price' => $newAverage,
                 'market_value_snapshot' => $newQuantity * $price,
                 'last_valued_at' => now(),
+                'admin_price_override' => null,
+                'admin_price_overridden_at' => null,
             ]);
 
             return;
@@ -172,6 +179,8 @@ class SubmitMarketOrder
             'average_entry_price' => $price,
             'market_value_snapshot' => $quantity * $price,
             'last_valued_at' => now(),
+            'admin_price_override' => null,
+            'admin_price_overridden_at' => null,
         ]);
     }
 
@@ -197,6 +206,8 @@ class SubmitMarketOrder
             'quantity' => $newQuantity,
             'market_value_snapshot' => $newQuantity * (float) $position->average_entry_price,
             'last_valued_at' => now(),
+            'admin_price_override' => null,
+            'admin_price_overridden_at' => null,
         ]);
     }
 }

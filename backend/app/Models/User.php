@@ -54,4 +54,9 @@ class User extends Authenticatable
     {
         return $this->hasMany(LedgerEntry::class);
     }
+
+    public function traderUpgradeRequests(): HasMany
+    {
+        return $this->hasMany(TraderUpgradeRequest::class);
+    }
 }

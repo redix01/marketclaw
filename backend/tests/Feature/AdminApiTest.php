@@ -3,8 +3,16 @@
 namespace Tests\Feature;
 
 use App\Models\DepositRequest;
+use App\Models\MarketQuote;
+use App\Models\Order;
+use App\Models\PaperAccount;
 use App\Models\PaymentMethod;
+use App\Models\Position;
+use App\Models\Symbol;
+use App\Models\TraderProfile;
+use App\Models\TraderUpgradeRequest;
 use App\Models\User;
+use App\Models\UserPreference;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
@@ -119,5 +127,133 @@ class AdminApiTest extends TestCase
         ])->assertOk();
 
         $this->assertTrue(Hash::check('new-password', $admin->fresh()->password));
+    }
+
+    public function test_admin_can_view_update_and_close_active_ai_trades(): void
+    {
+        $admin = User::factory()->create(['is_admin' => true]);
+        $user = User::factory()->create();
+        $symbol = Symbol::query()->create([
+            'ticker' => 'AAPL',
+            'name' => 'Apple Inc.',
+            'asset_type' => 'stock',
+            'is_active' => true,
+            'tradeable' => true,
+            'price_source' => 'finnhub',
+        ]);
+        $account = PaperAccount::query()->create([
+            'user_id' => $user->id,
+            'base_currency' => 'USD',
+            'cash_balance' => 10000,
+            'total_deposits' => 10000,
+            'total_withdrawals' => 0,
+            'status' => 'active',
+        ]);
+        UserPreference::query()->create([
+            'user_id' => $user->id,
+            'bot_running' => true,
+            'bot_asset_type' => 'stock',
+        ]);
+        MarketQuote::query()->create([
+            'symbol_id' => $symbol->id,
+            'price' => 120,
+            'change' => 0,
+            'change_percent' => 0,
+            'quoted_at' => now(),
+        ]);
+        $position = Position::query()->create([
+            'paper_account_id' => $account->id,
+            'symbol_id' => $symbol->id,
+            'quantity' => 2,
+            'average_entry_price' => 100,
+            'market_value_snapshot' => 240,
+            'last_valued_at' => now(),
+        ]);
+        Order::query()->create([
+            'paper_account_id' => $account->id,
+            'user_id' => $user->id,
+            'symbol_id' => $symbol->id,
+            'side' => 'buy',
+            'order_type' => 'market',
+            'quantity' => 2,
+            'submitted_price' => 100,
+            'fill_price' => 100,
+            'status' => 'filled',
+            'source' => 'bot',
+            'submitted_at' => now()->subMinute(),
+            'filled_at' => now()->subMinute(),
+        ]);
+
+        Sanctum::actingAs($admin);
+
+        $this->getJson('/api/v1/admin/trades')
+            ->assertOk()
+            ->assertJsonPath('data.0.id', $position->id)
+            ->assertJsonPath('data.0.unrealized_pnl', 40);
+
+        $this->patchJson('/api/v1/admin/trades/'.$position->id, [
+            'unrealized_pnl' => 80,
+        ])->assertOk()
+            ->assertJsonPath('data.current_price', 140)
+            ->assertJsonPath('data.unrealized_pnl', 80);
+
+        $this->postJson('/api/v1/admin/trades/'.$position->id.'/close')
+            ->assertOk();
+
+        $this->assertDatabaseMissing('positions', [
+            'id' => $position->id,
+        ]);
+        $this->assertDatabaseHas('orders', [
+            'paper_account_id' => $account->id,
+            'symbol_id' => $symbol->id,
+            'side' => 'sell',
+            'source' => 'bot',
+            'fill_price' => 140,
+        ]);
+        $this->assertSame(10280.0, (float) $account->fresh()->cash_balance);
+    }
+
+    public function test_admin_can_manage_trader_profiles_and_upgrade_requests(): void
+    {
+        $admin = User::factory()->create(['is_admin' => true]);
+        $user = User::factory()->create();
+        $profile = TraderProfile::query()->create([
+            'asset_type' => 'stock',
+            'title' => 'Stock AI Trader',
+            'description' => 'Initial description',
+            'commission_percent' => 20,
+            'level' => 1,
+        ]);
+        $upgradeRequest = TraderUpgradeRequest::query()->create([
+            'user_id' => $user->id,
+            'asset_type' => 'stock',
+            'requested_level' => 2,
+            'status' => 'pending',
+            'note' => 'Need more throughput',
+        ]);
+
+        Sanctum::actingAs($admin);
+
+        $this->getJson('/api/v1/admin/trader-profiles')
+            ->assertOk()
+            ->assertJsonFragment(['asset_type' => 'stock']);
+
+        $this->patchJson('/api/v1/admin/trader-profiles/'.$profile->id, [
+            'commission_percent' => 12.5,
+            'level' => 3,
+            'description' => 'Updated description',
+        ])->assertOk()
+            ->assertJsonPath('data.commission_percent', 12.5)
+            ->assertJsonPath('data.level', 3);
+
+        $this->getJson('/api/v1/admin/trader-upgrade-requests')
+            ->assertOk()
+            ->assertJsonPath('data.0.id', $upgradeRequest->id);
+
+        $this->patchJson('/api/v1/admin/trader-upgrade-requests/'.$upgradeRequest->id, [
+            'status' => 'approved',
+            'admin_notes' => 'Approved for next tier',
+        ])->assertOk()
+            ->assertJsonPath('data.status', 'approved');
     }
 }

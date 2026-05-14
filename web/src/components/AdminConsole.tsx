@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { adminService } from '../services/adminService';
-import { AdminStats, AdminTrade, AdminTransaction, AdminUserRow, DepositRequestRow, PaymentMethod } from '../types';
+import { AdminStats, AdminTrade, AdminTransaction, AdminUserRow, DepositRequestRow, PaymentMethod, TraderProfile, TraderUpgradeRequest } from '../types';
 import { AlertCircle, CheckCircle2 } from 'lucide-react';
 
-type AdminTab = 'dashboard' | 'users' | 'transactions' | 'payment-methods' | 'trades' | 'settings';
+type AdminTab = 'dashboard' | 'users' | 'transactions' | 'payment-methods' | 'trades' | 'trader-settings' | 'settings';
 
 interface AdminConsoleProps {
   tab: AdminTab;
@@ -25,6 +25,10 @@ function StatCard({ label, value }: { label: string; value: string | number }) {
       <p className="mt-3 text-2xl font-bold text-white">{value}</p>
     </div>
   );
+}
+
+function formatMoney(value: number) {
+  return `${value >= 0 ? '+' : '-'}$${Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function Modal({
@@ -68,6 +72,8 @@ export default function AdminConsole({ tab }: AdminConsoleProps) {
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [depositRequests, setDepositRequests] = useState<DepositRequestRow[]>([]);
   const [trades, setTrades] = useState<AdminTrade[]>([]);
+  const [traderProfiles, setTraderProfiles] = useState<TraderProfile[]>([]);
+  const [traderUpgradeRequests, setTraderUpgradeRequests] = useState<TraderUpgradeRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -87,6 +93,9 @@ export default function AdminConsole({ tab }: AdminConsoleProps) {
   const [transactionTypeFilter, setTransactionTypeFilter] = useState<'deposit' | 'withdrawal'>('deposit');
   const [reviewNotes, setReviewNotes] = useState<Record<number, string>>({});
   const [userActionAmount, setUserActionAmount] = useState('');
+  const [tradePnlDrafts, setTradePnlDrafts] = useState<Record<number, string>>({});
+  const [traderProfileForms, setTraderProfileForms] = useState<Record<number, { title: string; description: string; commission_percent: string; level: string }>>({});
+  const [upgradeReviewNotes, setUpgradeReviewNotes] = useState<Record<number, string>>({});
 
   const load = async () => {
     setLoading(true);
@@ -115,7 +124,33 @@ export default function AdminConsole({ tab }: AdminConsoleProps) {
         setPaymentMethods(await adminService.getPaymentMethods());
       }
       if (tab === 'trades') {
-        setTrades(await adminService.getTrades());
+        const tradeRows = await adminService.getTrades();
+        setTrades(tradeRows);
+        setTradePnlDrafts(
+          tradeRows.reduce<Record<number, string>>((acc, trade) => {
+            acc[trade.id] = trade.unrealized_pnl.toFixed(2);
+            return acc;
+          }, {})
+        );
+      }
+      if (tab === 'trader-settings') {
+        const [profiles, requests] = await Promise.all([
+          adminService.getTraderProfiles(),
+          adminService.getTraderUpgradeRequests(),
+        ]);
+        setTraderProfiles(profiles);
+        setTraderUpgradeRequests(requests);
+        setTraderProfileForms(
+          profiles.reduce<Record<number, { title: string; description: string; commission_percent: string; level: string }>>((acc, profile) => {
+            acc[profile.id] = {
+              title: profile.title,
+              description: profile.description,
+              commission_percent: String(profile.commission_percent),
+              level: String(profile.level),
+            };
+            return acc;
+          }, {})
+        );
       }
     } catch (err: any) {
       setError(err.message || 'Unable to load admin data.');
@@ -171,12 +206,30 @@ export default function AdminConsole({ tab }: AdminConsoleProps) {
         amount,
         description: type === 'deposit' ? 'Admin account funding' : 'Admin account debit',
       });
-      setSuccess(type === 'deposit' ? 'User funded successfully.' : 'User debited successfully.');
       setUserActionAmount('');
       setUserActionModal(null);
+      setSuccess(type === 'deposit' ? 'User funded successfully.' : 'User debited successfully.');
       await load();
     } catch (err: any) {
       setError(err.message || 'Unable to process quick transaction.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteUser = async (user: AdminUserRow['user']) => {
+    if (!window.confirm(`Delete user "${user.name}"?`)) {
+      return;
+    }
+
+    setSaving(true);
+    resetFlash();
+    try {
+      await adminService.deleteUser(user.id);
+      setSuccess('User deleted successfully.');
+      await load();
+    } catch (err: any) {
+      setError(err.message || 'Unable to delete user.');
     } finally {
       setSaving(false);
     }
@@ -357,6 +410,85 @@ export default function AdminConsole({ tab }: AdminConsoleProps) {
     }
   };
 
+  const handleUpdateTradePnl = async (trade: AdminTrade) => {
+    const draft = Number(tradePnlDrafts[trade.id] ?? trade.unrealized_pnl);
+    if (!Number.isFinite(draft)) {
+      setError('Enter a valid PnL value.');
+      return;
+    }
+
+    setSaving(true);
+    resetFlash();
+    try {
+      await adminService.updateTrade(trade.id, {
+        unrealized_pnl: draft,
+      });
+      setSuccess('Trade PnL updated successfully.');
+      await load();
+    } catch (err: any) {
+      setError(err.message || 'Unable to update trade PnL.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCloseTrade = async (trade: AdminTrade) => {
+    if (!window.confirm(`Close ${trade.symbol} for ${trade.user_name}?`)) {
+      return;
+    }
+
+    setSaving(true);
+    resetFlash();
+    try {
+      await adminService.closeTrade(trade.id);
+      setSuccess('Trade closed successfully.');
+      await load();
+    } catch (err: any) {
+      setError(err.message || 'Unable to close trade.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveTraderProfile = async (profile: TraderProfile) => {
+    const form = traderProfileForms[profile.id];
+    if (!form) return;
+
+    setSaving(true);
+    resetFlash();
+    try {
+      await adminService.updateTraderProfile(profile.id, {
+        title: form.title,
+        description: form.description,
+        commission_percent: Number(form.commission_percent),
+        level: Number(form.level),
+      });
+      setSuccess(`${profile.asset_type.toUpperCase()} trader updated successfully.`);
+      await load();
+    } catch (err: any) {
+      setError(err.message || 'Unable to update trader profile.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleReviewUpgradeRequest = async (request: TraderUpgradeRequest, status: 'approved' | 'rejected') => {
+    setSaving(true);
+    resetFlash();
+    try {
+      await adminService.updateTraderUpgradeRequest(request.id, {
+        status,
+        admin_notes: upgradeReviewNotes[request.id] ?? request.admin_notes ?? '',
+      });
+      setSuccess(`Upgrade request ${status}.`);
+      await load();
+    } catch (err: any) {
+      setError(err.message || 'Unable to review upgrade request.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (loading) {
     return <div className="rounded-3xl border border-zinc-800 bg-[#0F0F11] p-10 text-sm text-zinc-400">Loading admin data...</div>;
   }
@@ -444,7 +576,7 @@ export default function AdminConsole({ tab }: AdminConsoleProps) {
                       <div><p className="text-zinc-500">Withdrawals</p><p className="font-mono">${row.account.total_withdrawals.toLocaleString()}</p></div>
                       <div className="flex gap-2 items-end">
                         <button className="rounded-lg border border-zinc-700 px-3 py-2 text-xs font-bold text-zinc-200" onClick={() => openEditUserModal(row)}>Edit</button>
-                        <button className="rounded-lg border border-rose-500/30 px-3 py-2 text-xs font-bold text-rose-300" onClick={async () => { await adminService.deleteUser(row.user.id); await load(); }}>Delete</button>
+                        <button className="rounded-lg border border-rose-500/30 px-3 py-2 text-xs font-bold text-rose-300" onClick={() => void handleDeleteUser(row.user)}>Delete</button>
                       </div>
                     </div>
                   </div>
@@ -832,21 +964,65 @@ export default function AdminConsole({ tab }: AdminConsoleProps) {
                 <tr className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold border-b border-zinc-800/50">
                   <th className="py-3">User</th>
                   <th className="py-3">Symbol</th>
-                  <th className="py-3">Side</th>
                   <th className="py-3">Quantity</th>
-                  <th className="py-3">Fill</th>
-                  <th className="py-3">Status</th>
+                  <th className="py-3">Entry</th>
+                  <th className="py-3">Current</th>
+                  <th className="py-3">PnL</th>
+                  <th className="py-3">Bot</th>
+                  <th className="py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-800/50">
                 {trades.map((trade) => (
                   <tr key={trade.id}>
                     <td className="py-3 text-sm">{trade.user_name}<div className="text-xs text-zinc-500">{trade.user_email}</div></td>
-                    <td className="py-3 text-sm">{trade.symbol}<div className="text-xs text-zinc-500">{trade.symbol_name}</div></td>
-                    <td className="py-3 text-sm uppercase">{trade.side}</td>
+                    <td className="py-3 text-sm">{trade.symbol}<div className="text-xs text-zinc-500">{trade.symbol_name} · {trade.asset_type}</div></td>
                     <td className="py-3 text-sm font-mono">{trade.quantity}</td>
-                    <td className="py-3 text-sm font-mono">{trade.fill_price ? `$${trade.fill_price.toLocaleString()}` : 'N/A'}</td>
-                    <td className="py-3 text-sm">{trade.status}</td>
+                    <td className="py-3 text-sm font-mono">${trade.average_entry_price.toLocaleString()}</td>
+                    <td className="py-3 text-sm font-mono">
+                      ${trade.current_price.toLocaleString()}
+                      <div className="text-xs text-zinc-500">{trade.price_source === 'admin_override' ? 'Admin override' : 'Live market'}</div>
+                    </td>
+                    <td className="py-3 text-sm">
+                      <div className={`font-mono ${trade.unrealized_pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {formatMoney(trade.unrealized_pnl)}
+                      </div>
+                      <div className={`text-xs ${trade.pnl_percent >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                        {trade.pnl_percent >= 0 ? '+' : ''}{trade.pnl_percent.toFixed(2)}%
+                      </div>
+                    </td>
+                    <td className="py-3 text-sm">
+                      <span className={`inline-flex rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-wider ${trade.bot_running ? 'bg-emerald-500/10 text-emerald-300' : 'bg-zinc-800 text-zinc-300'}`}>
+                        {trade.bot_running ? 'Running' : 'Stopped'}
+                      </span>
+                    </td>
+                    <td className="py-3">
+                      <div className="flex flex-col items-end gap-2">
+                        <input
+                          className="w-32 rounded-lg border border-zinc-800 bg-zinc-900/50 px-3 py-2 text-right text-sm font-mono"
+                          type="number"
+                          step="0.01"
+                          value={tradePnlDrafts[trade.id] ?? trade.unrealized_pnl.toFixed(2)}
+                          onChange={(e) => setTradePnlDrafts((current) => ({ ...current, [trade.id]: e.target.value }))}
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            className="rounded-lg border border-yellow-500/30 px-3 py-2 text-xs font-bold text-yellow-300 transition hover:border-yellow-400 hover:text-yellow-200"
+                            disabled={saving}
+                            onClick={() => void handleUpdateTradePnl(trade)}
+                          >
+                            Save PnL
+                          </button>
+                          <button
+                            className="rounded-lg border border-rose-500/30 px-3 py-2 text-xs font-bold text-rose-300 transition hover:border-rose-400 hover:text-rose-200"
+                            disabled={saving}
+                            onClick={() => void handleCloseTrade(trade)}
+                          >
+                            Close Trade
+                          </button>
+                        </div>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -864,6 +1040,77 @@ export default function AdminConsole({ tab }: AdminConsoleProps) {
             <button className="rounded-xl bg-yellow-500 px-6 py-3 text-sm font-bold text-black" disabled={saving} onClick={handleUpdatePassword}>Change Password</button>
           </div>
         </SectionCard>
+      )}
+
+      {tab === 'trader-settings' && (
+        <div className="space-y-6">
+          <SectionCard title="Trader Profiles">
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+              {traderProfiles.map((profile) => {
+                const form = traderProfileForms[profile.id];
+                if (!form) return null;
+
+                return (
+                  <div key={profile.id} className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.22em] text-zinc-500 font-bold">{profile.asset_type}</p>
+                        <h3 className="mt-1 text-lg font-bold text-white">{profile.title}</h3>
+                      </div>
+                      <span className="inline-flex rounded-full border border-yellow-500/30 bg-yellow-500/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-yellow-300">
+                        Level {profile.level}
+                      </span>
+                    </div>
+                    <input className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm" value={form.title} onChange={(e) => setTraderProfileForms((current) => ({ ...current, [profile.id]: { ...form, title: e.target.value } }))} />
+                    <textarea className="min-h-28 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm" value={form.description} onChange={(e) => setTraderProfileForms((current) => ({ ...current, [profile.id]: { ...form, description: e.target.value } }))} />
+                    <div className="grid grid-cols-2 gap-3">
+                      <input className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm" type="number" step="0.01" value={form.commission_percent} onChange={(e) => setTraderProfileForms((current) => ({ ...current, [profile.id]: { ...form, commission_percent: e.target.value } }))} />
+                      <input className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm" type="number" min="1" step="1" value={form.level} onChange={(e) => setTraderProfileForms((current) => ({ ...current, [profile.id]: { ...form, level: e.target.value } }))} />
+                    </div>
+                    <button className="rounded-xl bg-yellow-500 px-4 py-3 text-sm font-bold text-black" disabled={saving} onClick={() => void handleSaveTraderProfile(profile)}>
+                      Save Trader Profile
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </SectionCard>
+
+          <SectionCard title="Upgrade Requests">
+            <div className="space-y-4">
+              {traderUpgradeRequests.map((request) => (
+                <div key={request.id} className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div>
+                      <p className="font-bold text-white">{request.user_name ?? 'Unknown User'}</p>
+                      <p className="text-sm text-zinc-400">{request.user_email}</p>
+                      <p className="mt-1 text-xs uppercase tracking-[0.18em] text-zinc-500 font-bold">
+                        {request.asset_type} · requested level {request.requested_level} · {request.status}
+                      </p>
+                      {request.note && <p className="mt-3 text-sm text-zinc-300">{request.note}</p>}
+                    </div>
+                    <div className="w-full max-w-md space-y-3">
+                      <textarea className="w-full min-h-24 rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm" placeholder="Admin notes" value={upgradeReviewNotes[request.id] ?? request.admin_notes ?? ''} onChange={(e) => setUpgradeReviewNotes((current) => ({ ...current, [request.id]: e.target.value }))} />
+                      <div className="flex flex-wrap gap-2">
+                        <button className="rounded-xl bg-yellow-500 px-4 py-3 text-sm font-bold text-black" disabled={saving || request.status === 'approved'} onClick={() => void handleReviewUpgradeRequest(request, 'approved')}>
+                          Approve
+                        </button>
+                        <button className="rounded-xl border border-rose-500/30 px-4 py-3 text-sm font-bold text-rose-300" disabled={saving || request.status === 'rejected'} onClick={() => void handleReviewUpgradeRequest(request, 'rejected')}>
+                          Reject
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {traderUpgradeRequests.length === 0 && (
+                <div className="rounded-2xl border border-zinc-800 bg-zinc-900/20 px-4 py-10 text-center text-sm text-zinc-500">
+                  No trader upgrade requests yet.
+                </div>
+              )}
+            </div>
+          </SectionCard>
+        </div>
       )}
     </div>
   );

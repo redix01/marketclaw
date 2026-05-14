@@ -6,6 +6,8 @@ use App\Http\Controllers\Admin\DepositRequestController;
 use App\Http\Controllers\Admin\PaymentMethodController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\TradeController;
+use App\Http\Controllers\Admin\TraderProfileController;
+use App\Http\Controllers\Admin\TraderUpgradeRequestController;
 use App\Http\Controllers\Admin\TransactionController;
 use App\Http\Controllers\Admin\UserController;
 use Illuminate\Support\Facades\Route;
@@ -37,6 +39,12 @@ Route::prefix('v1/admin')->group(function (): void {
         Route::delete('/deposit-requests/{depositRequest}', [DepositRequestController::class, 'destroy']);
 
         Route::get('/trades', [TradeController::class, 'index']);
+        Route::patch('/trades/{position}', [TradeController::class, 'update']);
+        Route::post('/trades/{position}/close', [TradeController::class, 'close']);
+        Route::get('/trader-profiles', [TraderProfileController::class, 'index']);
+        Route::patch('/trader-profiles/{traderProfile}', [TraderProfileController::class, 'update']);
+        Route::get('/trader-upgrade-requests', [TraderUpgradeRequestController::class, 'index']);
+        Route::patch('/trader-upgrade-requests/{traderUpgradeRequest}', [TraderUpgradeRequestController::class, 'update']);
         Route::patch('/settings/password', [SettingsController::class, 'updatePassword']);
     });
 });

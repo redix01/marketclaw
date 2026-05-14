@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { apiFetch } from '../services/api';
 import { tradingService } from '../services/tradingService';
 import { MOCK_SYMBOLS } from '../constants';
-import { Account, Agent, AgentLog, ClosedTrade, ClosedTradesSummary, DashboardSnapshot, LedgerEvent, Order, Position, SymbolInfo } from '../types';
+import { Account, Agent, AgentLog, ClosedTrade, ClosedTradesSummary, DashboardSnapshot, LedgerEvent, Order, Position, SymbolInfo, UserPreferences } from '../types';
 
 function mapAccount(account: any): Account {
   return {
@@ -98,6 +98,7 @@ export function useTradingData(user: any) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [ledger, setLedger] = useState<LedgerEvent[]>([]);
   const [dashboard, setDashboard] = useState<DashboardSnapshot | null>(null);
+  const [preferences, setPreferences] = useState<UserPreferences | null>(null);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [logs, setLogs] = useState<AgentLog[]>([]);
   const [symbols, setSymbols] = useState(MOCK_SYMBOLS);
@@ -149,6 +150,10 @@ export function useTradingData(user: any) {
           { name: 'Crypto', value: 34216.06, color: '#f59e0b' },
         ],
       });
+      setPreferences({
+        bot_running: true,
+        bot_asset_type: 'stock',
+      });
       setAgents([
         {
           id: 'g_bot_1',
@@ -174,7 +179,7 @@ export function useTradingData(user: any) {
       setLoading(true);
 
       try {
-        const [dashboardResponse, accountResponse, positionsResponse, ordersResponse, ledgerResponse, symbolsResponse, closedTradesResponse] = await Promise.all([
+        const [dashboardResponse, accountResponse, positionsResponse, ordersResponse, ledgerResponse, symbolsResponse, closedTradesResponse, preferencesResponse] = await Promise.all([
           apiFetch<{ data: any }>(`/users/${uid}/dashboard`),
           apiFetch<{ data: any }>(`/users/${uid}/account`),
           apiFetch<{ data: any[] }>(`/users/${uid}/positions`),
@@ -182,6 +187,7 @@ export function useTradingData(user: any) {
           apiFetch<{ data: any[] }>(`/users/${uid}/ledger`),
           tradingService.refreshSymbols(),
           apiFetch<{ data: any[]; summary: any }>(`/users/${uid}/closed-trades`),
+          tradingService.getPreferences(uid),
         ]);
 
         if (cancelled) return;
@@ -191,6 +197,20 @@ export function useTradingData(user: any) {
         setPositions(positionsResponse.data.map(mapPosition));
         setOrders(ordersResponse.data.map(mapOrder));
         setLedger(ledgerResponse.data.map(mapLedger));
+        setPreferences(preferencesResponse ? {
+          bot_running: !!preferencesResponse.bot_running,
+          bot_asset_type: preferencesResponse.bot_asset_type === 'stock' || preferencesResponse.bot_asset_type === 'crypto'
+            ? preferencesResponse.bot_asset_type
+            : null,
+          bot_started_at: preferencesResponse.bot_started_at ?? null,
+          bot_stopped_at: preferencesResponse.bot_stopped_at ?? null,
+          take_profit_percent: preferencesResponse.take_profit_percent ?? undefined,
+          wallet_exposure_percent: preferencesResponse.wallet_exposure_percent ?? undefined,
+          emergency_stop_percent: preferencesResponse.emergency_stop_percent ?? undefined,
+          max_open_positions: preferencesResponse.max_open_positions ?? undefined,
+          auto_close_enabled: preferencesResponse.auto_close_enabled ?? undefined,
+          commission_percent: preferencesResponse.commission_percent ?? undefined,
+        } : null);
         setSymbols(mapSymbols(symbolsResponse));
         setAgents([]);
         setLogs([]);
@@ -245,5 +265,5 @@ export function useTradingData(user: any) {
     };
   }, [user]);
 
-  return { account, positions, orders, ledger, dashboard, agents, logs, symbols, closedTrades, closedTradesSummary, loading };
+  return { account, positions, orders, ledger, dashboard, preferences, agents, logs, symbols, closedTrades, closedTradesSummary, loading };
 }

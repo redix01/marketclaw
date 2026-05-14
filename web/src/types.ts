@@ -31,6 +31,7 @@ export interface Position {
   quantity: number;
   averageEntryPrice: number;
   currentPrice?: number;
+  currentPriceSource?: 'market' | 'admin_override' | 'entry_price';
   marketValue?: number;
   unrealizedPL?: number;
   updatedAt: string;
@@ -120,6 +121,47 @@ export interface DashboardSnapshot {
   summary: DashboardSummary;
   equityCurve: EquityPoint[];
   assetAllocation: AllocationPoint[];
+}
+
+export interface UserPreferences {
+  bot_running: boolean;
+  bot_asset_type?: AssetType | null;
+  bot_started_at?: string | null;
+  bot_stopped_at?: string | null;
+  take_profit_percent?: number;
+  wallet_exposure_percent?: number;
+  emergency_stop_percent?: number;
+  max_open_positions?: number;
+  auto_close_enabled?: boolean;
+  commission_percent?: number;
+}
+
+export interface TraderUpgradeRequest {
+  id: number;
+  user_id: number;
+  asset_type: AssetType;
+  requested_level: number;
+  status: 'pending' | 'approved' | 'rejected';
+  note?: string | null;
+  admin_notes?: string | null;
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  user_name?: string | null;
+  user_email?: string | null;
+}
+
+export interface TraderProfile {
+  id: number;
+  asset_type: AssetType;
+  title: string;
+  description: string;
+  commission_percent: number;
+  level: number;
+  pending_upgrade_request?: TraderUpgradeRequest | null;
+  created_at?: string | null;
+  updated_at?: string | null;
 }
 
 export interface ClosedTrade {
@@ -226,13 +268,15 @@ export interface AdminTrade {
   user_email?: string | null;
   symbol?: string | null;
   symbol_name?: string | null;
-  side: string;
+  asset_type: AssetType;
   quantity: number;
-  submitted_price?: number | null;
-  fill_price?: number | null;
-  status: string;
-  agent_id?: number | null;
-  submitted_at?: string | null;
-  filled_at?: string | null;
-  created_at?: string | null;
+  average_entry_price: number;
+  current_price: number;
+  market_value: number;
+  unrealized_pnl: number;
+  pnl_percent: number;
+  bot_running: boolean;
+  price_source: 'market' | 'admin_override' | 'entry_price';
+  updated_at?: string | null;
+  admin_price_overridden_at?: string | null;
 }

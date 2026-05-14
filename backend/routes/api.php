@@ -13,6 +13,8 @@ use App\Http\Controllers\Api\V1\OrderController;
 use App\Http\Controllers\Api\V1\PaymentMethodController;
 use App\Http\Controllers\Api\V1\PreferenceController;
 use App\Http\Controllers\Api\V1\PositionController;
+use App\Http\Controllers\Api\V1\TraderProfileController;
+use App\Http\Controllers\Api\V1\TraderUpgradeRequestController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function (): void {
@@ -41,6 +43,8 @@ Route::prefix('v1')->group(function (): void {
         Route::post('/orders', [OrderController::class, 'store']);
         Route::get('/ledger', [LedgerController::class, 'index']);
         Route::get('/closed-trades', [ClosedTradesController::class, 'index']);
+        Route::get('/trader-profiles', [TraderProfileController::class, 'index']);
+        Route::post('/trader-upgrade-requests', [TraderUpgradeRequestController::class, 'store']);
 
         Route::post('/bot/start', [BotController::class, 'start']);
         Route::post('/bot/stop', [BotController::class, 'stop']);

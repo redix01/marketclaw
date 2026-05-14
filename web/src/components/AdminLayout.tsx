@@ -6,6 +6,7 @@ import {
   ArrowLeftRight,
   Landmark,
   Bot,
+  BadgePercent,
   Settings,
   Menu,
   X,
@@ -67,6 +68,7 @@ export default function AdminLayout({ children, activeTab, user, onLogout }: Adm
     { id: 'transactions', label: 'Transactions', icon: ArrowLeftRight },
     { id: 'payment-methods', label: 'Payment Methods', icon: Landmark },
     { id: 'trades', label: 'AI Trades', icon: Bot },
+    { id: 'trader-settings', label: 'Trader Settings', icon: BadgePercent },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
 

@@ -18,7 +18,7 @@ import LandingPage from './components/LandingPage';
 
 const APP_TABS = ['overview', 'portfolio', 'ai-trader', 'wallet', 'settings'] as const;
 type AppTab = (typeof APP_TABS)[number];
-const ADMIN_TABS = ['dashboard', 'users', 'transactions', 'payment-methods', 'trades', 'settings'] as const;
+const ADMIN_TABS = ['dashboard', 'users', 'transactions', 'payment-methods', 'trades', 'trader-settings', 'settings'] as const;
 type AdminTab = (typeof ADMIN_TABS)[number];
 
 function normalizeTab(tab?: string): AppTab {
@@ -83,12 +83,12 @@ function DashboardShell({
 }) {
   const { tab } = useParams();
   const activeTab = normalizeTab(tab);
-  const { account, positions, orders, ledger, dashboard, agents, logs, symbols, closedTrades, closedTradesSummary } = useTradingData(user);
+  const { account, positions, orders, ledger, dashboard, preferences, agents, logs, symbols, closedTrades, closedTradesSummary } = useTradingData(user);
 
   const renderContent = () => {
     switch (activeTab) {
       case 'overview':
-        return <Dashboard account={account} positions={positions} orders={orders} ledger={ledger} agents={agents} dashboard={dashboard} closedTradesSummary={closedTradesSummary} />;
+        return <Dashboard account={account} positions={positions} orders={orders} ledger={ledger} agents={agents} dashboard={dashboard} preferences={preferences} closedTradesSummary={closedTradesSummary} />;
       case 'portfolio':
         return <Portfolio account={account} positions={positions} symbols={symbols} />;
       case 'ai-trader':
@@ -98,7 +98,7 @@ function DashboardShell({
       case 'settings':
         return <Settings user={user} />;
       default:
-        return <Dashboard account={account} positions={positions} orders={orders} ledger={ledger} agents={agents} dashboard={dashboard} closedTradesSummary={closedTradesSummary} />;
+        return <Dashboard account={account} positions={positions} orders={orders} ledger={ledger} agents={agents} dashboard={dashboard} preferences={preferences} closedTradesSummary={closedTradesSummary} />;
     }
   };
 
@@ -262,6 +262,42 @@ function AppRoutes({
       <Route
         path="/app"
         element={user ? <Navigate to="/app/overview" replace /> : <Navigate to="/auth" replace state={{ from: location }} />}
+      />
+      <Route
+        path="/dashboard"
+        element={
+          user ? (
+            <DashboardShell
+              basePath="/app"
+              user={user}
+              isGuest={false}
+              onExitGuest={() => {
+                setIsGuest(false);
+                navigate('/');
+              }}
+            />
+          ) : (
+            <Navigate to="/auth" replace state={{ from: location }} />
+          )
+        }
+      />
+      <Route
+        path="/dashboard/:tab"
+        element={
+          user ? (
+            <DashboardShell
+              basePath="/app"
+              user={user}
+              isGuest={false}
+              onExitGuest={() => {
+                setIsGuest(false);
+                navigate('/');
+              }}
+            />
+          ) : (
+            <Navigate to="/auth" replace state={{ from: location }} />
+          )
+        }
       />
       <Route
         path="/app/wallet/deposit"

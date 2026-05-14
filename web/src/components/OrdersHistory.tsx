@@ -1,5 +1,5 @@
 import React from 'react';
-import { ClipboardList, Search, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { ClipboardList, Search } from 'lucide-react';
 import { Order } from '../types';
 
 interface OrdersHistoryProps {
@@ -7,7 +7,7 @@ interface OrdersHistoryProps {
   ledger: never[];
 }
 
-export default function OrdersHistory({ orders }: OrdersHistory) {
+export default function OrdersHistory({ orders }: OrdersHistoryProps) {
   return (
     <div className="space-y-6">
       <div className="bg-[#0F0F11] border border-zinc-800/50 rounded-2xl overflow-hidden">

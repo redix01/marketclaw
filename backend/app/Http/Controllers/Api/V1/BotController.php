@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Domain\Accounts\Actions\EnsurePaperAccount;
+use App\Domain\Trading\Actions\EnsureTraderProfiles;
+use App\Domain\Trading\Actions\SeedBotPositions;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Support\Api\FrontendPayload;
@@ -13,33 +15,70 @@ use Illuminate\Validation\Rule;
 
 class BotController extends Controller
 {
-    public function start(Request $request, User $user, EnsurePaperAccount $ensurePaperAccount): JsonResponse
+    public function start(
+        Request $request,
+        User $user,
+        EnsurePaperAccount $ensurePaperAccount,
+        EnsureTraderProfiles $ensureTraderProfiles,
+        SeedBotPositions $seedBotPositions,
+    ): JsonResponse
     {
         $validated = $request->validate([
             'asset_type' => ['sometimes', 'nullable', Rule::in(['stock', 'crypto'])],
+            'mode' => ['sometimes', Rule::in(['fresh', 'resume'])],
         ]);
 
-        $ensurePaperAccount->handle($user);
+        $account = $ensurePaperAccount->handle($user);
         $user->load('preferences');
+        $profiles = $ensureTraderProfiles->handle()->keyBy('asset_type');
 
         $preferences = $user->preferences;
+        $assetType = $validated['asset_type'] ?? $preferences->bot_asset_type ?? 'stock';
+        $mode = $validated['mode'] ?? 'fresh';
+        $profile = $profiles->get($assetType);
+        $hadOpenPositions = $account->positions()
+            ->whereHas('symbol', fn ($query) => $query->where('asset_type', $assetType))
+            ->exists();
+
+        $closedCount = 0;
+        $opened = ['opened' => 0, 'symbols' => []];
+        $startedAt = now();
+
+        if ($mode === 'resume' && $hadOpenPositions && $preferences->bot_started_at) {
+            $startedAt = $preferences->bot_started_at;
+        } else {
+            $closedCount = $seedBotPositions->closeExistingPositions($account, $assetType);
+            $opened = $seedBotPositions->openFreshPositions($account->fresh(), $preferences, $assetType);
+        }
+
         $update = [
             'bot_running' => true,
-            'bot_started_at' => now(),
+            'bot_started_at' => $startedAt,
+            'bot_stopped_at' => null,
+            'bot_asset_type' => $assetType,
         ];
-        if (array_key_exists('asset_type', $validated)) {
-            $update['bot_asset_type'] = $validated['asset_type'];
+        if ($profile) {
+            $update['commission_percent'] = (float) $profile->commission_percent;
         }
         $preferences->forceFill($update)->save();
 
         Log::info('BotController: started for user_id='.$user->id
-            .' type='.($preferences->bot_asset_type ?? 'all')
+            .' type='.$assetType
+            .' mode='.$mode
+            .' opened='.$opened['opened']
+            .' closed='.$closedCount
             .' tp='.$preferences->take_profit_percent.'% stop='.$preferences->emergency_stop_percent.'%');
 
         return response()->json([
             'message' => 'Agent trader started.',
             'data' => [
                 'preferences' => FrontendPayload::preference($preferences->fresh()),
+                'session' => [
+                    'mode' => $mode === 'resume' && $hadOpenPositions ? 'resume' : 'fresh',
+                    'opened_positions_count' => $opened['opened'],
+                    'closed_positions_count' => $closedCount,
+                    'opened_symbols' => $opened['symbols'],
+                ],
             ],
         ]);
     }

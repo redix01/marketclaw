@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 import { MOCK_SYMBOLS } from '../constants';
 import { tradingService } from '../services/tradingService';
-import { Account, ClosedTrade, ClosedTradesSummary, Position, SymbolInfo } from '../types';
+import { Account, ClosedTrade, ClosedTradesSummary, Position, SymbolInfo, TraderProfile, TraderUpgradeRequest } from '../types';
 
 interface AssetsProps {
   basePath: '/app' | '/demo';
@@ -61,8 +61,6 @@ const DEFAULT_WIN_RATES: Record<AssetClass, number> = {
   stock: 80,
   crypto: 77,
 };
-
-const COMMISSION_PERCENT = 20;
 
 const DEFAULT_CONFIG: TraderConfig = {
   leverage: 10,
@@ -277,14 +275,16 @@ function buildGrid(
   };
 }
 
-function tickGrid(config: GridConfig, prevTick: GridTick | undefined, nowMs: number): GridTick {
+function tickGrid(config: GridConfig, prevTick: GridTick | undefined, nowMs: number, marketPrice?: number): GridTick {
   const seed = symbolSeed(config.symbol);
   const slow = Math.sin(nowMs / 7300 + seed) * 0.0008;
   const fast = Math.sin(nowMs / 1100 + seed * 1.7) * 0.0011;
   const drift = slow + fast;
 
   const prevPrice = prevTick?.price ?? config.basePrice;
-  const targetPrice = config.basePrice * (1 + drift);
+  const targetPrice = marketPrice && marketPrice > 0
+    ? marketPrice
+    : config.basePrice * (1 + drift);
   const price = prevPrice + (targetPrice - prevPrice) * 0.18;
 
   const changePercent = ((price - config.basePrice) / config.basePrice) * 100 + config.baseChangePercent;
@@ -316,6 +316,8 @@ export default function Assets({ positions, symbols, account, serverTrades, serv
   // safely drops back to the SetupForm screen.
   const [inCooldown, setInCooldown] = useState(false);
   const [botStartedAt, setBotStartedAt] = useState<string | null>(null);
+  const [traderProfiles, setTraderProfiles] = useState<Record<AssetClass, TraderProfile>>({} as Record<AssetClass, TraderProfile>);
+  const [upgradeBusy, setUpgradeBusy] = useState(false);
 
   // Hydrate config + running flag + asset class from the server preferences
   // on mount, so the trader picks up where the user left off across devices.
@@ -325,11 +327,19 @@ export default function Assets({ positions, symbols, account, serverTrades, serv
       return;
     }
     let cancelled = false;
-    void tradingService.getPreferences(uid).then((prefs) => {
+    void Promise.all([
+      tradingService.getPreferences(uid),
+      tradingService.getTraderProfiles(uid),
+    ]).then(([prefs, profiles]) => {
       if (cancelled || !prefs) {
         setHydrated(true);
         return;
       }
+      const nextProfiles = profiles.reduce((acc, profile) => {
+        acc[profile.asset_type] = profile;
+        return acc;
+      }, {} as Record<AssetClass, TraderProfile>);
+      setTraderProfiles(nextProfiles);
       const next: TraderConfig = {
         leverage: prefs.leverage ?? DEFAULT_CONFIG.leverage,
         takeProfitPercent: prefs.take_profit_percent ?? DEFAULT_CONFIG.takeProfitPercent,
@@ -381,20 +391,23 @@ export default function Assets({ positions, symbols, account, serverTrades, serv
     persistAssetType(null);
   };
 
-  const handleStart = async (next: TraderConfig) => {
+  const handleStart = async (next: TraderConfig, mode: 'fresh' | 'resume' = 'fresh') => {
     if (!selectedType) return;
     setConfig(next);
     setBusy(true);
     try {
       window.localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(next));
-      // RUNTIME_STORAGE_KEY is set after cooldown completes — not here.
-      // Resetting the grid session ensures fresh state for the new run.
-      window.localStorage.removeItem(STORAGE_KEY);
+      if (mode === 'fresh') {
+        // Resetting the grid session ensures fresh state for the new run.
+        window.localStorage.removeItem(STORAGE_KEY);
+      }
     } catch { /* ignore */ }
 
     let startedAt = new Date().toISOString();
+    let actualMode: 'fresh' | 'resume' = mode;
     if (!isGuest) {
       try {
+        const profileCommission = traderProfiles[selectedType]?.commission_percent;
         await tradingService.updatePreferences(uid, {
           leverage: next.leverage,
           take_profit_percent: next.takeProfitPercent,
@@ -403,15 +416,24 @@ export default function Assets({ positions, symbols, account, serverTrades, serv
           max_open_positions: next.maxOpenPositions,
           auto_close_enabled: next.autoCloseEnabled,
           bot_asset_type: selectedType,
+          commission_percent: profileCommission,
         });
-        const prefs = await tradingService.startBot(uid, selectedType);
-        startedAt = prefs?.bot_started_at ?? startedAt;
+        const response = await tradingService.startBot(uid, selectedType, mode);
+        startedAt = response?.preferences?.bot_started_at ?? startedAt;
+        actualMode = response?.session?.mode ?? actualMode;
       } catch (err) {
         console.error('Failed to start agent on server:', err);
       }
     }
     setBotStartedAt(startedAt);
     setBusy(false);
+    if (actualMode === 'resume') {
+      setRunning(true);
+      try {
+        window.localStorage.setItem(RUNTIME_STORAGE_KEY, '1');
+      } catch { /* ignore */ }
+      return;
+    }
     setInCooldown(true);
   };
 
@@ -471,12 +493,39 @@ export default function Assets({ positions, symbols, account, serverTrades, serv
       <RunningTrader
         config={config}
         assetType={selectedType}
+        profile={traderProfiles[selectedType]}
         liveSymbols={liveSymbols}
         positions={positions}
         account={account}
         serverTrades={serverTrades}
         serverTradesSummary={serverTradesSummary}
         botStartedAt={botStartedAt}
+        onRequestUpgrade={async () => {
+          if (!uid || !selectedType || upgradeBusy) return;
+          const profile = traderProfiles[selectedType];
+          if (!profile) return;
+          setUpgradeBusy(true);
+          try {
+            const note = window.prompt(`Request ${profile.title} upgrade to level ${profile.level + 1}. Optional note:`) ?? '';
+            const request = await tradingService.requestTraderUpgrade(uid, {
+              asset_type: selectedType,
+              requested_level: profile.level + 1,
+              note: note.trim() || undefined,
+            });
+            setTraderProfiles((current) => ({
+              ...current,
+              [selectedType]: {
+                ...profile,
+                pending_upgrade_request: request,
+              },
+            }));
+          } catch (error) {
+            console.error('Failed to request upgrade:', error);
+          } finally {
+            setUpgradeBusy(false);
+          }
+        }}
+        upgradeBusy={upgradeBusy}
         onStop={handleStop}
         onSwitchTrader={handleSwitchTrader}
         busy={busy}
@@ -500,10 +549,12 @@ export default function Assets({ positions, symbols, account, serverTrades, serv
     return (
       <SetupForm
         assetType={selectedType}
+        profile={traderProfiles[selectedType]}
         initial={config}
         account={account}
         closedTradesSummary={serverTradesSummary}
         onStart={handleStart}
+        hasExistingPositions={positions.some((position) => position.assetType === selectedType)}
         onBack={handleBackToSelect}
         busy={busy}
       />
@@ -515,6 +566,7 @@ export default function Assets({ positions, symbols, account, serverTrades, serv
       account={account}
       symbols={liveSymbols}
       serverTrades={serverTrades}
+      traderProfiles={traderProfiles}
       onPick={handlePickTrader}
     />
   );
@@ -768,11 +820,13 @@ function TraderSelect({
   account,
   symbols,
   serverTrades,
+  traderProfiles,
   onPick,
 }: {
   account: Account | null;
   symbols: SymbolInfo[];
   serverTrades: ClosedTrade[];
+  traderProfiles: Record<AssetClass, TraderProfile>;
   onPick: (type: AssetClass) => void;
 }) {
   const wallet = account?.cashBalance ?? 0;
@@ -821,8 +875,9 @@ function TraderSelect({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         <TraderCard
           type="stock"
-          title="Stock AI Trader"
-          description="Tracks blue-chip and high-volatility equities; opens grid positions around technical levels."
+          profile={traderProfiles.stock}
+          title={traderProfiles.stock?.title ?? 'Stock AI Trader'}
+          description={traderProfiles.stock?.description ?? 'Tracks blue-chip and high-volatility equities; opens grid positions around technical levels.'}
           accent="from-yellow-500/20 to-yellow-600/[0.04]"
           icon={<LineChart size={22} className="text-yellow-300" />}
           symbolsCount={counts.stock}
@@ -832,8 +887,9 @@ function TraderSelect({
         />
         <TraderCard
           type="crypto"
-          title="Crypto AI Trader"
-          description="24/7 grid agent on top crypto pairs — fractional sizing, faster cycles, deeper exposure ranges."
+          profile={traderProfiles.crypto}
+          title={traderProfiles.crypto?.title ?? 'Crypto AI Trader'}
+          description={traderProfiles.crypto?.description ?? '24/7 grid agent on top crypto pairs — fractional sizing, faster cycles, deeper exposure ranges.'}
           accent="from-amber-500/20 to-amber-600/[0.04]"
           icon={<Coins size={22} className="text-amber-300" />}
           symbolsCount={counts.crypto}
@@ -846,8 +902,8 @@ function TraderSelect({
       <div className="rounded-2xl border border-zinc-800/70 bg-zinc-900/30 px-5 py-4 flex items-start gap-3">
         <BadgePercent size={18} className="text-yellow-400 flex-shrink-0 mt-0.5" />
         <div className="text-xs text-zinc-400 leading-relaxed">
-          <span className="text-white font-bold">Platform commission.</span> {COMMISSION_PERCENT}% of every
-          winning auto-close is taken as commission — the remaining {100 - COMMISSION_PERCENT}% lands in your
+          <span className="text-white font-bold">Platform commission.</span> Levels and commissions are managed by the admin for each trader.
+          Winning auto-closes are charged per-trader commission, and the remaining proceeds land in your
           wallet immediately and compounds into the next cycle. Losing closes are not charged.
         </div>
       </div>
@@ -857,6 +913,7 @@ function TraderSelect({
 
 function TraderCard({
   type,
+  profile,
   title,
   description,
   accent,
@@ -867,6 +924,7 @@ function TraderCard({
   onPick,
 }: {
   type: AssetClass;
+  profile?: TraderProfile;
   title: string;
   description: string;
   accent: string;
@@ -879,6 +937,8 @@ function TraderCard({
   const min = TRADER_MINIMUMS[type];
   const insufficient = wallet < min;
   const shortBy = Math.max(0, min - wallet);
+  const commissionPercent = profile?.commission_percent ?? 20;
+  const level = profile?.level ?? 1;
 
   return (
     <div className={`relative overflow-hidden rounded-2xl border ${insufficient ? 'border-zinc-800/70' : 'border-yellow-500/20'} bg-gradient-to-br ${accent} p-6 flex flex-col gap-5`}>
@@ -902,6 +962,17 @@ function TraderCard({
         )}
       </div>
 
+      <div className="flex items-center gap-2 -mt-2">
+        <span className="inline-flex items-center rounded-full border border-zinc-700 bg-zinc-950/70 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-300">
+          Level {level}
+        </span>
+        {profile?.pending_upgrade_request?.status === 'pending' && (
+          <span className="inline-flex items-center rounded-full border border-yellow-500/30 bg-yellow-500/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-yellow-300">
+            Upgrade Pending
+          </span>
+        )}
+      </div>
+
       <p className="text-sm text-zinc-400 leading-relaxed">{description}</p>
 
       <div className="grid grid-cols-2 gap-3">
@@ -917,7 +988,7 @@ function TraderCard({
         />
         <Stat
           label="Commission"
-          value={`${COMMISSION_PERCENT}%`}
+          value={`${commissionPercent}%`}
           hint="on winners only"
         />
         <Stat
@@ -981,18 +1052,22 @@ function Stat({
 
 function SetupForm({
   assetType,
+  profile,
   initial,
   account,
   closedTradesSummary,
   onStart,
+  hasExistingPositions,
   onBack,
   busy,
 }: {
   assetType: AssetClass;
+  profile?: TraderProfile;
   initial: TraderConfig;
   account: Account | null;
   closedTradesSummary: ClosedTradesSummary | null;
-  onStart: (cfg: TraderConfig) => void | Promise<void>;
+  onStart: (cfg: TraderConfig, mode: 'fresh' | 'resume') => void | Promise<void>;
+  hasExistingPositions: boolean;
   onBack: () => void;
   busy: boolean;
 }) {
@@ -1017,14 +1092,15 @@ function SetupForm({
   const minRequired = TRADER_MINIMUMS[assetType];
   const insufficient = wallet < minRequired;
   const shortBy = Math.max(0, minRequired - wallet);
-  const traderLabel = assetType === 'stock' ? 'Stock AI Trader' : 'Crypto AI Trader';
+  const traderLabel = profile?.title ?? (assetType === 'stock' ? 'Stock AI Trader' : 'Crypto AI Trader');
   const TraderIcon = assetType === 'stock' ? LineChart : Coins;
   const iconTone = assetType === 'stock' ? 'text-yellow-300' : 'text-amber-300';
+  const commissionPercent = profile?.commission_percent ?? 20;
 
-  const handleStart = async () => {
+  const handleStart = async (mode: 'fresh' | 'resume') => {
     if (insufficient) return;
     setSaving(true);
-    await onStart(config);
+    await onStart(config, mode);
     setSaving(false);
   };
 
@@ -1046,7 +1122,7 @@ function SetupForm({
           <p className="text-sm text-zinc-500 mt-1.5 max-w-xl">
             Set leverage, exposure and risk limits. The agent rotates through {assetType === 'stock' ? 'equity' : 'crypto'}{' '}
             instruments, auto-closes winners at your TP, and net realized P&amp;L (after the
-            {' '}{COMMISSION_PERCENT}% commission) lands in your wallet.
+            {' '}{commissionPercent}% commission) lands in your wallet.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -1054,6 +1130,10 @@ function SetupForm({
             <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Wallet</p>
             <p className={`mt-1 text-xl font-mono font-bold ${insufficient ? 'text-rose-300' : 'text-white'}`}>{formatMoney(wallet)}</p>
             <p className="text-[9px] text-zinc-500 mt-0.5">min ${minRequired}</p>
+          </div>
+          <div className="px-4 py-3 rounded-xl border border-zinc-800/70 bg-[#0F0F11] min-w-[140px]">
+            <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Bot Level</p>
+            <p className="mt-1 text-xl font-mono font-bold text-white">Lv {profile?.level ?? 1}</p>
           </div>
           <div className="px-4 py-3 rounded-xl border border-zinc-800/70 bg-[#0F0F11] min-w-[140px]">
             <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Realized P&amp;L</p>
@@ -1167,7 +1247,7 @@ function SetupForm({
               {' '}({config.walletExposurePercent}% of wallet) across <span className="font-mono text-yellow-300">{config.maxOpenPositions}</span> {assetType} grid positions
               at <span className="font-mono text-yellow-300">{config.leverage}x</span> leverage. Auto-close fires at
               {' '}<span className="font-mono text-yellow-300">+{config.takeProfitPercent}%</span> realized;
-              the platform takes <span className="font-mono text-yellow-300">{COMMISSION_PERCENT}%</span> of each
+              the platform takes <span className="font-mono text-yellow-300">{commissionPercent}%</span> of each
               winning close, the rest auto-credits your wallet.
               Stop loss halts trading at <span className="font-mono text-rose-300">-{config.emergencyStopPercent}%</span>.
             </p>
@@ -1175,24 +1255,36 @@ function SetupForm({
         </div>
       </div>
 
-      <button
-        onClick={handleStart}
-        disabled={saving || busy || insufficient}
-        className={`w-full py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors ${
-          insufficient
-            ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
-            : 'bg-yellow-500 hover:bg-yellow-400 disabled:opacity-50 text-black'
-        }`}
-      >
-        {(saving || busy) ? (
-          <span className="w-5 h-5 border-2 border-black/20 border-t-black rounded-full animate-spin" />
-        ) : insufficient ? (
-          <Lock size={18} />
-        ) : (
-          <Play size={20} fill="currentColor" />
+      <div className={`grid gap-3 ${hasExistingPositions ? 'md:grid-cols-2' : 'grid-cols-1'}`}>
+        <button
+          onClick={() => void handleStart('fresh')}
+          disabled={saving || busy || insufficient}
+          className={`w-full py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors ${
+            insufficient
+              ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
+              : 'bg-yellow-500 hover:bg-yellow-400 disabled:opacity-50 text-black'
+          }`}
+        >
+          {(saving || busy) ? (
+            <span className="w-5 h-5 border-2 border-black/20 border-t-black rounded-full animate-spin" />
+          ) : insufficient ? (
+            <Lock size={18} />
+          ) : (
+            <Play size={20} fill="currentColor" />
+          )}
+          {insufficient ? `Need $${shortBy.toFixed(2)} more` : ((saving || busy) ? 'Starting…' : `Start Fresh ${traderLabel.replace(' AI Trader', '')}`)}
+        </button>
+        {hasExistingPositions && (
+          <button
+            onClick={() => void handleStart('resume')}
+            disabled={saving || busy}
+            className="w-full py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors border border-zinc-700 bg-zinc-900 hover:border-yellow-500/40 hover:text-yellow-300 disabled:opacity-50"
+          >
+            <Activity size={18} />
+            {(saving || busy) ? 'Resuming…' : 'Resume Existing Trades'}
+          </button>
         )}
-        {insufficient ? `Need $${shortBy.toFixed(2)} more` : ((saving || busy) ? 'Starting…' : `Start ${traderLabel.replace(' AI Trader', '')} Trader`)}
-      </button>
+      </div>
     </div>
   );
 }
@@ -1316,24 +1408,30 @@ function NumberInput({
 function RunningTrader({
   config,
   assetType,
+  profile,
   liveSymbols,
   positions,
   account,
   serverTrades,
   serverTradesSummary,
   botStartedAt,
+  onRequestUpgrade,
+  upgradeBusy,
   onStop,
   onSwitchTrader,
   busy,
 }: {
   config: TraderConfig;
   assetType: AssetClass;
+  profile?: TraderProfile;
   liveSymbols: SymbolInfo[];
   positions: Position[];
   account: Account | null;
   serverTrades: ClosedTrade[];
   serverTradesSummary: ClosedTradesSummary | null;
   botStartedAt?: string | null;
+  onRequestUpgrade: () => void | Promise<void>;
+  upgradeBusy: boolean;
   onStop: () => void | Promise<void>;
   onSwitchTrader: () => void | Promise<void>;
   busy: boolean;
@@ -1405,6 +1503,7 @@ function RunningTrader({
     () => persistedRef.current?.selectedSymbol ?? grids[0]?.symbol ?? ''
   );
   const [ticks, setTicks] = useState<Record<string, GridTick>>({});
+  const [liveMarketPrices, setLiveMarketPrices] = useState<Record<string, number>>({});
   const ticksRef = useRef<Record<string, GridTick>>({});
   ticksRef.current = ticks;
   const gridsRef = useRef(grids);
@@ -1413,6 +1512,42 @@ function RunningTrader({
   sessionRealizedRef.current = sessionRealized;
   const haltedRef = useRef(emergencyHalted);
   haltedRef.current = emergencyHalted;
+  const liveMarketPricesRef = useRef<Record<string, number>>({});
+  liveMarketPricesRef.current = liveMarketPrices;
+
+  useEffect(() => {
+    if (assetType !== 'crypto' || filteredSymbols.length === 0) {
+      setLiveMarketPrices({});
+      return;
+    }
+
+    const streams = filteredSymbols
+      .map((symbol) => `${symbol.symbol.toLowerCase()}usdt@miniTicker`)
+      .join('/');
+
+    const socket = new WebSocket(`wss://stream.binance.com:9443/stream?streams=${streams}`);
+
+    socket.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        const stream = payload?.stream as string | undefined;
+        const price = Number(payload?.data?.c ?? 0);
+        const ticker = typeof stream === 'string' ? stream.split('@')[0]?.replace('usdt', '').toUpperCase() : null;
+
+        if (!ticker || !Number.isFinite(price) || price <= 0) {
+          return;
+        }
+
+        setLiveMarketPrices((current) => ({ ...current, [ticker]: price }));
+      } catch {
+        /* ignore malformed feed packets */
+      }
+    };
+
+    return () => {
+      socket.close();
+    };
+  }, [assetType, filteredSymbols]);
 
   useEffect(() => {
     if (!grids.some((grid) => grid.symbol === selectedSymbol)) {
@@ -1438,7 +1573,12 @@ function RunningTrader({
 
         for (let i = 0; i < currentGrids.length; i += 1) {
           const grid = currentGrids[i];
-          const tick = tickGrid(grid, ticksRef.current[grid.id], nowMs);
+          const tick = tickGrid(
+            grid,
+            ticksRef.current[grid.id],
+            nowMs,
+            assetType === 'crypto' ? liveMarketPricesRef.current[grid.symbol] : undefined,
+          );
           const pnlPct = grid.margin > 0 ? tick.unrealizedPnL / grid.margin : 0;
 
           const ageMs = Date.now() - grid.openedAt;
@@ -1640,12 +1780,28 @@ function RunningTrader({
             {assetType === 'stock' ? <LineChart size={10} className="text-yellow-300" /> : <Coins size={10} className="text-amber-300" />}
             {assetType === 'stock' ? 'Stock Trader' : 'Crypto Trader'}
           </div>
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-zinc-900 border border-zinc-800 text-[10px] uppercase tracking-[0.22em] font-bold text-zinc-300">
+            Level {profile?.level ?? 1}
+          </div>
+          {profile?.pending_upgrade_request?.status === 'pending' && (
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-yellow-500/10 border border-yellow-500/25 text-[10px] uppercase tracking-[0.22em] font-bold text-yellow-300">
+              Upgrade Pending
+            </div>
+          )}
           <div className="text-xs text-zinc-500">
-            {config.leverage}x · TP +{config.takeProfitPercent}% · Stop -{config.emergencyStopPercent}% · Exposure {config.walletExposurePercent}% · Comm. {COMMISSION_PERCENT}%
+            {config.leverage}x · TP +{config.takeProfitPercent}% · Stop -{config.emergencyStopPercent}% · Exposure {config.walletExposurePercent}% · Comm. {profile?.commission_percent ?? 20}%
             {!config.autoCloseEnabled && ' · Auto-close OFF'}
+            {assetType === 'crypto' && ' · WebSocket feed'}
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => void onRequestUpgrade()}
+            disabled={upgradeBusy || profile?.pending_upgrade_request?.status === 'pending'}
+            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-zinc-800 hover:border-yellow-500/40 hover:bg-yellow-500/10 text-zinc-300 hover:text-yellow-300 text-xs font-bold transition-colors disabled:opacity-50"
+          >
+            <BadgePercent size={14} /> {profile?.pending_upgrade_request?.status === 'pending' ? 'Upgrade Requested' : `Request Lv ${(profile?.level ?? 1) + 1}`}
+          </button>
           <button
             onClick={onSwitchTrader}
             disabled={busy}

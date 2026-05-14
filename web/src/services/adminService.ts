@@ -1,5 +1,5 @@
 import { apiFetch } from './api';
-import { AdminStats, AdminTrade, AdminTransaction, AdminUserRow, DepositRequestRow, PaymentMethod } from '../types';
+import { AdminStats, AdminTrade, AdminTransaction, AdminUserRow, DepositRequestRow, PaymentMethod, TraderProfile, TraderUpgradeRequest } from '../types';
 
 export const adminService = {
   async getDashboard(): Promise<{ stats: AdminStats; recent_deposit_requests: DepositRequestRow[] }> {
@@ -101,6 +101,46 @@ export const adminService = {
 
   async getTrades(): Promise<AdminTrade[]> {
     const response = await apiFetch<{ data: AdminTrade[] }>('/admin/trades');
+    return response.data;
+  },
+
+  async updateTrade(tradeId: number, payload: Record<string, unknown>) {
+    const response = await apiFetch<{ data: AdminTrade }>(`/admin/trades/${tradeId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+    return response.data;
+  },
+
+  async closeTrade(tradeId: number) {
+    await apiFetch(`/admin/trades/${tradeId}/close`, {
+      method: 'POST',
+    });
+  },
+
+  async getTraderProfiles(): Promise<TraderProfile[]> {
+    const response = await apiFetch<{ data: TraderProfile[] }>('/admin/trader-profiles');
+    return response.data;
+  },
+
+  async updateTraderProfile(profileId: number, payload: Record<string, unknown>) {
+    const response = await apiFetch<{ data: TraderProfile }>(`/admin/trader-profiles/${profileId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+    return response.data;
+  },
+
+  async getTraderUpgradeRequests(): Promise<TraderUpgradeRequest[]> {
+    const response = await apiFetch<{ data: TraderUpgradeRequest[] }>('/admin/trader-upgrade-requests');
+    return response.data;
+  },
+
+  async updateTraderUpgradeRequest(requestId: number, payload: Record<string, unknown>) {
+    const response = await apiFetch<{ data: TraderUpgradeRequest }>(`/admin/trader-upgrade-requests/${requestId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
     return response.data;
   },
 

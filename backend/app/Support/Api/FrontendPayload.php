@@ -7,6 +7,8 @@ use App\Models\Order;
 use App\Models\PaperAccount;
 use App\Models\PaymentMethod;
 use App\Models\Position;
+use App\Models\TraderProfile;
+use App\Models\TraderUpgradeRequest;
 use App\Models\User;
 use App\Models\UserPreference;
 
@@ -72,7 +74,7 @@ class FrontendPayload
 
     public static function position(Position $position): array
     {
-        $currentPrice = (float) optional($position->symbol->latestQuote)->price ?: (float) $position->average_entry_price;
+        $currentPrice = $position->resolvedCurrentPrice();
         $quantity = (float) $position->quantity;
         $averageEntryPrice = (float) $position->average_entry_price;
 
@@ -87,6 +89,7 @@ class FrontendPayload
             'current_price' => $currentPrice,
             'market_value' => $quantity * $currentPrice,
             'unrealized_pl' => ($quantity * $currentPrice) - ($quantity * $averageEntryPrice),
+            'current_price_source' => $position->currentPriceSource(),
             'updated_at' => optional($position->updated_at)->toISOString(),
         ];
     }
@@ -138,6 +141,38 @@ class FrontendPayload
             'is_active' => $method->is_active,
             'created_at' => optional($method->created_at)->toISOString(),
             'updated_at' => optional($method->updated_at)->toISOString(),
+        ];
+    }
+
+    public static function traderProfile(TraderProfile $profile, ?TraderUpgradeRequest $pendingRequest = null): array
+    {
+        return [
+            'id' => $profile->id,
+            'asset_type' => $profile->asset_type,
+            'title' => $profile->title,
+            'description' => $profile->description,
+            'commission_percent' => (float) $profile->commission_percent,
+            'level' => (int) $profile->level,
+            'pending_upgrade_request' => $pendingRequest ? self::traderUpgradeRequest($pendingRequest) : null,
+            'created_at' => optional($profile->created_at)->toISOString(),
+            'updated_at' => optional($profile->updated_at)->toISOString(),
+        ];
+    }
+
+    public static function traderUpgradeRequest(TraderUpgradeRequest $request): array
+    {
+        return [
+            'id' => $request->id,
+            'user_id' => $request->user_id,
+            'asset_type' => $request->asset_type,
+            'requested_level' => (int) $request->requested_level,
+            'status' => $request->status,
+            'note' => $request->note,
+            'admin_notes' => $request->admin_notes,
+            'reviewed_by' => $request->reviewer?->name,
+            'reviewed_at' => optional($request->reviewed_at)->toISOString(),
+            'created_at' => optional($request->created_at)->toISOString(),
+            'updated_at' => optional($request->updated_at)->toISOString(),
         ];
     }
 }

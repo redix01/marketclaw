@@ -23,7 +23,7 @@ import {
   Pie,
   Cell
 } from 'recharts';
-import { Account, Position, Order, LedgerEvent, Agent, DashboardSnapshot, ClosedTradesSummary } from '../types';
+import { Account, Position, Order, LedgerEvent, Agent, DashboardSnapshot, ClosedTradesSummary, UserPreferences } from '../types';
 
 interface DashboardProps {
   account: Account | null;
@@ -32,6 +32,7 @@ interface DashboardProps {
   ledger: LedgerEvent[];
   agents: Agent[];
   dashboard: DashboardSnapshot | null;
+  preferences: UserPreferences | null;
   closedTradesSummary: ClosedTradesSummary | null;
 }
 
@@ -54,7 +55,7 @@ const StatCard = ({ title, value, subValue, icon: Icon, trend }: any) => (
   </div>
 );
 
-export default function Dashboard({ account, positions, orders, ledger, agents, dashboard, closedTradesSummary }: DashboardProps) {
+export default function Dashboard({ account, positions, orders, ledger, agents, dashboard, preferences, closedTradesSummary }: DashboardProps) {
   const [range, setRange] = useState<'1D' | '1W' | '1M' | 'ALL'>('1W');
 
   const holdingsValue = dashboard?.summary.holdingsValue
@@ -123,6 +124,26 @@ export default function Dashboard({ account, positions, orders, ledger, agents, 
       { name: 'Crypto', value: cryptoValue, color: '#f59e0b' },
     ].filter((item) => item.value > 0);
   }, [account?.cashBalance, dashboard?.assetAllocation, positions]);
+
+  const aiTraderPositions = useMemo(() => {
+    const assetType = preferences?.bot_asset_type;
+
+    if (!assetType) {
+      return [];
+    }
+
+    return positions.filter((pos) => pos.assetType === assetType);
+  }, [positions, preferences?.bot_asset_type]);
+
+  const displayedPositions = aiTraderPositions.length > 0 ? aiTraderPositions : positions;
+  const isAiTraderFocused = !!preferences?.bot_asset_type;
+  const aiTraderLabel = preferences?.bot_asset_type === 'crypto' ? 'Crypto AI Trader' : 'Stock AI Trader';
+  const openPositionsTitle = isAiTraderFocused ? `${aiTraderLabel} Open Positions` : 'Open Positions';
+  const openPositionsSubtitle = isAiTraderFocused
+    ? (preferences?.bot_running
+      ? 'Live positions currently managed by the AI trader.'
+      : 'Open positions matching the last AI trader market.')
+    : 'Current holdings across the account.';
 
   return (
     <div className="space-y-6">
@@ -234,8 +255,18 @@ export default function Dashboard({ account, positions, orders, ledger, agents, 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-[#0F0F11] border border-zinc-800/50 rounded-2xl overflow-hidden">
           <div className="p-6 border-b border-zinc-800/50 flex justify-between items-center">
-            <h3 className="text-lg font-bold">Open Positions</h3>
-            <button className="text-xs font-bold text-yellow-400 hover:text-yellow-300">View All</button>
+            <div>
+              <h3 className="text-lg font-bold flex items-center gap-2">
+                {isAiTraderFocused && <Bot size={18} className="text-yellow-400" />}
+                {openPositionsTitle}
+              </h3>
+              <p className="mt-1 text-xs text-zinc-500">{openPositionsSubtitle}</p>
+            </div>
+            {isAiTraderFocused && (
+              <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${preferences?.bot_running ? 'bg-yellow-500/10 text-yellow-400' : 'bg-zinc-800 text-zinc-300'}`}>
+                {preferences?.bot_running ? 'Running' : 'Stopped'}
+              </span>
+            )}
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left">
@@ -249,7 +280,7 @@ export default function Dashboard({ account, positions, orders, ledger, agents, 
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-800/50">
-                {positions.slice(0, 5).map((pos) => {
+                {displayedPositions.slice(0, 5).map((pos) => {
                   const currentPrice = pos.currentPrice || pos.averageEntryPrice;
                   const pl = pos.unrealizedPL ?? ((currentPrice - pos.averageEntryPrice) * pos.quantity);
                   const plPercent = ((currentPrice / pos.averageEntryPrice) - 1) * 100;
@@ -277,10 +308,12 @@ export default function Dashboard({ account, positions, orders, ledger, agents, 
                     </tr>
                   );
                 })}
-                {positions.length === 0 && (
+                {displayedPositions.length === 0 && (
                   <tr>
                     <td colSpan={5} className="px-6 py-12 text-center text-zinc-500 italic">
-                      No open positions. Start trading to see holdings.
+                      {isAiTraderFocused
+                        ? 'No open AI trader positions yet. Start the trader to see active positions here.'
+                        : 'No open positions. Start trading to see holdings.'}
                     </td>
                   </tr>
                 )}

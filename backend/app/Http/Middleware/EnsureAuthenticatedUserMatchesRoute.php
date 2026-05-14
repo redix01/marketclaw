@@ -13,7 +13,15 @@ class EnsureAuthenticatedUserMatchesRoute
         $authUser = $request->user();
         $routeUser = $request->route('user');
 
-        if (! $authUser || ! $routeUser || (int) $authUser->getAuthIdentifier() !== (int) $routeUser->getKey()) {
+        if (! $authUser || ! $routeUser) {
+            abort(403, 'You are not allowed to access this user resource.');
+        }
+
+        if ((bool) ($authUser->is_admin ?? false)) {
+            return $next($request);
+        }
+
+        if ((int) $authUser->getAuthIdentifier() !== (int) $routeUser->getKey()) {
             abort(403, 'You are not allowed to access this user resource.');
         }
 

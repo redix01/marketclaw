@@ -45,12 +45,10 @@ class AutoCloseProfitablePositions
             .' commission='.$commissionPercent.'%');
 
         foreach ($positions as $position) {
-            $latestQuote = $position->symbol->latestQuote;
-            if (! $latestQuote) {
+            $currentPrice = $position->resolvedCurrentPrice();
+            if ($currentPrice <= 0) {
                 continue;
             }
-
-            $currentPrice = (float) $latestQuote->price;
             $entryPrice = (float) $position->average_entry_price;
 
             if ($entryPrice <= 0) {
