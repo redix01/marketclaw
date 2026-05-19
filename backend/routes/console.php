@@ -2,10 +2,14 @@
 
 use App\Domain\Accounts\Actions\DepositFunds;
 use App\Domain\Accounts\Actions\EnsurePaperAccount;
+use App\Domain\Trading\Actions\AutoCloseProfitablePositions;
+use App\Domain\Trading\Actions\SeedBotPositions;
 use App\Models\User;
+use App\Models\UserPreference;
 use App\Services\MarketDataRefreshService;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schedule;
 
 Artisan::command('inspire', function () {
@@ -24,6 +28,110 @@ Artisan::command('market:sync-live-quotes {--stale-minutes=5}', function (): int
 Schedule::command('market:sync-live-quotes --stale-minutes=1')
     ->everyMinute()
     ->withoutOverlapping();
+
+/**
+ * Trading automation tick.
+ *
+ * Runs on a cron interval (see schedule below) and walks every user whose
+ * bot is flipped on. For each one we:
+ *   1. Auto-close any open positions that have hit the user's take-profit
+ *      or stop-loss thresholds (commissions handled by AutoClose action).
+ *   2. Top the slot count back up to max_open_positions by opening fresh
+ *      grids on the most volatile symbols in their selected asset class.
+ *
+ * This is what makes the AI Trader keep working when the user's browser
+ * is closed — the in-browser tick loop only animates while the dashboard
+ * is open; this cron is the source of truth.
+ */
+Artisan::command('trader:tick {--user=}', function (
+    AutoCloseProfitablePositions $autoClose,
+    SeedBotPositions $seed,
+    MarketDataRefreshService $marketData,
+): int {
+    // Make sure we're acting on fresh prices before checking thresholds.
+    $marketData->refreshStaleQuotes(2);
+
+    $query = UserPreference::query()->where('bot_running', true);
+    if ($userFilter = $this->option('user')) {
+        $userId = User::query()->where('email', $userFilter)->orWhere('id', $userFilter)->value('id');
+        if (! $userId) {
+            $this->error("No user matches {$userFilter}.");
+
+            return 1;
+        }
+        $query->where('user_id', $userId);
+    }
+
+    $preferences = $query->with('user.paperAccount')->get();
+
+    if ($preferences->isEmpty()) {
+        $this->line('No bots are currently running.');
+
+        return 0;
+    }
+
+    $closedTotal = 0;
+    $openedTotal = 0;
+
+    foreach ($preferences as $preference) {
+        $user = $preference->user;
+        $account = $user?->paperAccount;
+        if (! $user || ! $account) {
+            continue;
+        }
+
+        try {
+            $closed = $autoClose->handle($account, $preference);
+            $closedTotal += count($closed);
+
+            $assetType = $preference->bot_asset_type;
+            $maxOpen = (int) ($preference->max_open_positions ?? 10);
+            if ($assetType) {
+                $account->refresh();
+                $openCount = $account->positions()
+                    ->whereHas('symbol', fn ($q) => $q->where('asset_type', $assetType))
+                    ->count();
+                if ($openCount < $maxOpen && (float) $account->cash_balance > 0) {
+                    $result = $seed->openFreshPositions($account, $preference, $assetType);
+                    $openedTotal += $result['opened'] ?? 0;
+                    if (! empty($result['symbols'])) {
+                        $this->line(sprintf('Opened for %s (%s): %s',
+                            $user->email,
+                            $assetType,
+                            implode(', ', $result['symbols'])
+                        ));
+                    }
+                }
+            }
+
+            if ($closed) {
+                $this->line(sprintf('Closed for %s: %s',
+                    $user->email,
+                    implode(', ', $closed)
+                ));
+            }
+        } catch (\Throwable $error) {
+            Log::error('trader:tick failed for user '.$user->id.': '.$error->getMessage(), [
+                'exception' => $error,
+            ]);
+            $this->error('User '.$user->email.' tick failed: '.$error->getMessage());
+        }
+    }
+
+    $this->info(sprintf(
+        'trader:tick processed %d bot(s): closed=%d opened=%d',
+        $preferences->count(),
+        $closedTotal,
+        $openedTotal
+    ));
+
+    return 0;
+})->purpose('Run the AI trader automation cycle (auto-close + open fresh positions) for every active bot');
+
+Schedule::command('trader:tick')
+    ->everyMinute()
+    ->withoutOverlapping()
+    ->runInBackground();
 
 Artisan::command('wallet:credit {email?} {--amount=1000} {--description=Test credit}', function (
     EnsurePaperAccount $ensurePaperAccount,

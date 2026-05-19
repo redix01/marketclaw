@@ -12,7 +12,8 @@ import {
   User,
   Menu,
   X,
-  ChevronRight
+  ChevronRight,
+  LogOut
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -29,6 +30,7 @@ interface LayoutProps {
   account: any;
   isGuest?: boolean;
   onExitGuest?: () => void;
+  onLogout?: () => void;
 }
 
 const SidebarItem = ({ icon: Icon, label, id, active, href }: any) => (
@@ -47,7 +49,7 @@ const SidebarItem = ({ icon: Icon, label, id, active, href }: any) => (
   </Link>
 );
 
-export default function Layout({ children, activeTab, basePath, user, account, isGuest, onExitGuest }: LayoutProps) {
+export default function Layout({ children, activeTab, basePath, user, account, isGuest, onExitGuest, onLogout }: LayoutProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -131,7 +133,7 @@ export default function Layout({ children, activeTab, basePath, user, account, i
             ))}
           </nav>
 
-          <div className="mt-auto pt-4 border-t border-zinc-800/50">
+          <div className="mt-auto pt-4 border-t border-zinc-800/50 space-y-2">
             <div className={cn("flex items-center gap-3 px-2", (!isSidebarOpen && !isMobileMenuOpen) && "justify-center")}>
               <div className="w-10 h-10 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center overflow-hidden shrink-0">
                 {user?.photoURL ? (
@@ -147,6 +149,19 @@ export default function Layout({ children, activeTab, basePath, user, account, i
                 </div>
               )}
             </div>
+            {onLogout && (
+              <button
+                onClick={onLogout}
+                title="Logout"
+                className={cn(
+                  "w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-zinc-400 hover:bg-red-500/10 hover:text-red-400 transition-all duration-200",
+                  (!isSidebarOpen && !isMobileMenuOpen) && "justify-center px-0"
+                )}
+              >
+                <LogOut size={20} className="shrink-0" />
+                {(isSidebarOpen || isMobileMenuOpen) && <span className="font-medium">Logout</span>}
+              </button>
+            )}
           </div>
         </div>
       </aside>

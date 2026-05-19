@@ -4,13 +4,7 @@ import {
   TrendingUp, 
   Shield, 
   Zap, 
-  ArrowRight, 
-  Github, 
-  Globe, 
-  Cpu, 
-  BarChart3, 
-  Layers,
-  ChevronRight,
+  ArrowRight,
   Target,
   Globe2,
   Coins,
@@ -90,7 +84,7 @@ export default function LandingPage({ user, onLaunchApp, onViewDemo }: LandingPa
           </div>
           
           <div className="hidden lg:flex items-center gap-12 text-sm font-medium text-zinc-400 uppercase tracking-widest">
-            <a href="#features" className="hover:text-yellow-400 transition-colors">Intelligence</a>
+            <a href="#process" className="hover:text-yellow-400 transition-colors">Workflow</a>
             <a href="#markets" className="hover:text-yellow-400 transition-colors">Markets</a>
             <a href="#demo" className="hover:text-yellow-400 transition-colors">Interface</a>
           </div>
@@ -129,7 +123,7 @@ export default function LandingPage({ user, onLaunchApp, onViewDemo }: LandingPa
               className="lg:hidden bg-[#050505] border-b border-white/5 overflow-hidden"
             >
               <div className="px-8 py-8 flex flex-col gap-6 text-sm font-bold uppercase tracking-[0.2em] text-zinc-400">
-                <a href="#features" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-yellow-400 transition-colors">Intelligence</a>
+                <a href="#process" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-yellow-400 transition-colors">Workflow</a>
                 <a href="#markets" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-yellow-400 transition-colors">Markets</a>
                 <a href="#demo" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-yellow-400 transition-colors">Interface</a>
                 <div className="pt-6 border-t border-white/5 flex flex-col gap-4">
@@ -497,8 +491,8 @@ export default function LandingPage({ user, onLaunchApp, onViewDemo }: LandingPa
       {/* Footer */}
       <footer className="py-24 border-t border-white/5 px-8 bg-[#050505]">
         <div className="max-w-[1400px] mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-16 mb-24">
-            <div className="col-span-2">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-16 mb-24">
+            <div className="col-span-1 md:col-span-2">
               <div className="flex items-center gap-4 mb-8">
                 <div className="w-10 h-10 bg-yellow-500 rounded-xl flex items-center justify-center">
                   <Bot className="text-black" size={24} />
@@ -509,39 +503,22 @@ export default function LandingPage({ user, onLaunchApp, onViewDemo }: LandingPa
                 Empowering traders with autonomous financial intelligence across every asset class.
               </p>
             </div>
-            
+
             <div>
               <h4 className="text-white font-bold uppercase tracking-widest text-xs mb-8">Platform</h4>
               <ul className="space-y-4 text-zinc-500 text-sm">
-                <li><a href="#" className="hover:text-white transition-colors">Intelligence</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Markets</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Interface</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">API</a></li>
+                <li><a href="#process" className="hover:text-white transition-colors">Workflow</a></li>
+                <li><a href="#markets" className="hover:text-white transition-colors">Markets</a></li>
+                <li><a href="#demo" className="hover:text-white transition-colors">Interface</a></li>
+                <li><a href="#faq" className="hover:text-white transition-colors">FAQ</a></li>
               </ul>
             </div>
-
-            <div>
-              <h4 className="text-white font-bold uppercase tracking-widest text-xs mb-8">Connect</h4>
-              <div className="flex gap-4">
-                <button className="w-12 h-12 bg-zinc-900 border border-white/5 rounded-2xl flex items-center justify-center text-zinc-400 hover:text-white transition-all">
-                  <Github size={20} />
-                </button>
-                <button className="w-12 h-12 bg-zinc-900 border border-white/5 rounded-2xl flex items-center justify-center text-zinc-400 hover:text-white transition-all">
-                  <Globe size={20} />
-                </button>
-              </div>
-            </div>
           </div>
-          
-          <div className="pt-12 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-8">
+
+          <div className="pt-12 border-t border-white/5">
             <p className="text-[10px] text-zinc-600 uppercase tracking-[0.4em] font-bold">
               © 2026 MarketClaw. All Rights Reserved.
             </p>
-            <div className="flex gap-8 text-[10px] text-zinc-600 uppercase tracking-[0.2em] font-bold">
-              <a href="#" className="hover:text-white transition-colors">Privacy</a>
-              <a href="#" className="hover:text-white transition-colors">Terms</a>
-              <a href="#" className="hover:text-white transition-colors">Security</a>
-            </div>
           </div>
         </div>
       </footer>

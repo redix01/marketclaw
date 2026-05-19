@@ -89,6 +89,20 @@ export const authService = {
     }
   },
 
+  async forgotPassword(email: string) {
+    return apiFetch<{ message: string }>('/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+  },
+
+  async resetPassword(payload: { token: string; email: string; password: string; password_confirmation: string }) {
+    return apiFetch<{ message: string }>('/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
   async logout() {
     const session = getStoredSession();
 

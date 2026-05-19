@@ -79,7 +79,7 @@ export default function AdminConsole({ tab }: AdminConsoleProps) {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const [userForm, setUserForm] = useState<any>({ name: '', email: '', password: '', password_confirmation: '', status: 'active', is_admin: false, initial_balance: 10000 });
+  const [userForm, setUserForm] = useState<any>({ name: '', email: '', password: '', password_confirmation: '', status: 'active', is_admin: false, initial_balance: 0 });
   const [transactionForm, setTransactionForm] = useState<any>({ user_id: '', type: 'deposit', amount: '', description: '' });
   const [paymentMethodForm, setPaymentMethodForm] = useState<any>({ name: '', network: '', address: '', instructions: '', is_active: true });
   const [passwordForm, setPasswordForm] = useState<any>({ current_password: '', password: '', password_confirmation: '' });
@@ -180,7 +180,7 @@ export default function AdminConsole({ tab }: AdminConsoleProps) {
         setSuccess('User created successfully.');
       }
       setEditingUserId(null);
-      setUserForm({ name: '', email: '', password: '', password_confirmation: '', status: 'active', is_admin: false, initial_balance: 10000 });
+      setUserForm({ name: '', email: '', password: '', password_confirmation: '', status: 'active', is_admin: false, initial_balance: 0 });
       setIsUserModalOpen(false);
       await load();
     } catch (err: any) {
@@ -313,7 +313,7 @@ export default function AdminConsole({ tab }: AdminConsoleProps) {
   const openCreateUserModal = () => {
     resetFlash();
     setEditingUserId(null);
-    setUserForm({ name: '', email: '', password: '', password_confirmation: '', status: 'active', is_admin: false, initial_balance: 10000 });
+    setUserForm({ name: '', email: '', password: '', password_confirmation: '', status: 'active', is_admin: false, initial_balance: 0 });
     setIsUserModalOpen(true);
   };
 
@@ -597,7 +597,7 @@ export default function AdminConsole({ tab }: AdminConsoleProps) {
               }
               setIsUserModalOpen(false);
               setEditingUserId(null);
-              setUserForm({ name: '', email: '', password: '', password_confirmation: '', status: 'active', is_admin: false, initial_balance: 10000 });
+              setUserForm({ name: '', email: '', password: '', password_confirmation: '', status: 'active', is_admin: false, initial_balance: 0 });
             }}
           >
             <div className="space-y-3">
@@ -621,7 +621,7 @@ export default function AdminConsole({ tab }: AdminConsoleProps) {
                   onClick={() => {
                     setIsUserModalOpen(false);
                     setEditingUserId(null);
-                    setUserForm({ name: '', email: '', password: '', password_confirmation: '', status: 'active', is_admin: false, initial_balance: 10000 });
+                    setUserForm({ name: '', email: '', password: '', password_confirmation: '', status: 'active', is_admin: false, initial_balance: 0 });
                   }}
                 >
                   Cancel

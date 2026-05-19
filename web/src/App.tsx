@@ -75,11 +75,13 @@ function DashboardShell({
   user,
   isGuest,
   onExitGuest,
+  onLogout,
 }: {
   basePath: '/app' | '/demo';
   user: any;
   isGuest: boolean;
   onExitGuest: () => void;
+  onLogout?: () => void;
 }) {
   const { tab } = useParams();
   const activeTab = normalizeTab(tab);
@@ -90,7 +92,7 @@ function DashboardShell({
       case 'overview':
         return <Dashboard account={account} positions={positions} orders={orders} ledger={ledger} agents={agents} dashboard={dashboard} preferences={preferences} closedTradesSummary={closedTradesSummary} />;
       case 'portfolio':
-        return <Portfolio account={account} positions={positions} symbols={symbols} />;
+        return <Portfolio user={user} account={account} positions={positions} symbols={symbols} />;
       case 'ai-trader':
         return <Assets basePath={basePath} positions={positions} symbols={symbols} account={account} serverTrades={closedTrades} serverTradesSummary={closedTradesSummary} user={user} />;
       case 'wallet':
@@ -110,6 +112,7 @@ function DashboardShell({
       account={account}
       isGuest={isGuest}
       onExitGuest={onExitGuest}
+      onLogout={onLogout}
     >
       <AnimatePresence mode="wait">
         <motion.div
@@ -131,11 +134,13 @@ function WalletDepositShell({
   user,
   isGuest,
   onExitGuest,
+  onLogout,
 }: {
   basePath: '/app' | '/demo';
   user: any;
   isGuest: boolean;
   onExitGuest: () => void;
+  onLogout?: () => void;
 }) {
   const { account } = useTradingData(user);
 
@@ -147,6 +152,7 @@ function WalletDepositShell({
       account={account}
       isGuest={isGuest}
       onExitGuest={onExitGuest}
+      onLogout={onLogout}
     >
       <AnimatePresence mode="wait">
         <motion.div
@@ -186,6 +192,14 @@ function AppRoutes({
     displayName: 'Guest Trader',
     email: 'guest@marketclaw.io',
     photoURL: null,
+  };
+
+  const handleLogout = () => {
+    void authService.logout().then(() => {
+      setIsGuest(false);
+      setUser(null);
+      navigate('/', { replace: true });
+    });
   };
 
   return (
@@ -275,6 +289,7 @@ function AppRoutes({
                 setIsGuest(false);
                 navigate('/');
               }}
+              onLogout={handleLogout}
             />
           ) : (
             <Navigate to="/auth" replace state={{ from: location }} />
@@ -293,6 +308,7 @@ function AppRoutes({
                 setIsGuest(false);
                 navigate('/');
               }}
+              onLogout={handleLogout}
             />
           ) : (
             <Navigate to="/auth" replace state={{ from: location }} />
@@ -311,6 +327,7 @@ function AppRoutes({
                 setIsGuest(false);
                 navigate('/');
               }}
+              onLogout={handleLogout}
             />
           ) : (
             <Navigate to="/auth" replace state={{ from: location }} />
@@ -329,6 +346,7 @@ function AppRoutes({
                 setIsGuest(false);
                 navigate('/');
               }}
+              onLogout={handleLogout}
             />
           ) : (
             <Navigate to="/auth" replace state={{ from: location }} />

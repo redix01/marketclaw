@@ -67,9 +67,15 @@ const DEFAULT_CONFIG: TraderConfig = {
   takeProfitPercent: 2.0,
   walletExposurePercent: 25,
   emergencyStopPercent: 5,
-  maxOpenPositions: 5,
+  maxOpenPositions: 10,
   autoCloseEnabled: true,
 };
+
+// Trader plan range for the "Max Open Positions" slider. The plan auto-scales
+// between these bounds so the grid always runs with enough concurrency to
+// rotate capital, but never more than the wallet can realistically support.
+const MAX_OPEN_POSITIONS_MIN = 10;
+const MAX_OPEN_POSITIONS_MAX = 30;
 
 const CONFIG_STORAGE_KEY = 'marketclaw:trader-config:v1';
 const RUNTIME_STORAGE_KEY = 'marketclaw:trader-running:v1';
@@ -275,7 +281,7 @@ function buildGrid(
   };
 }
 
-function tickGrid(config: GridConfig, prevTick: GridTick | undefined, nowMs: number, marketPrice?: number): GridTick {
+function tickGrid(config: GridConfig, prevTick: GridTick | undefined, nowMs: number, liveLeverage: number, marketPrice?: number): GridTick {
   const seed = symbolSeed(config.symbol);
   const slow = Math.sin(nowMs / 7300 + seed) * 0.0008;
   const fast = Math.sin(nowMs / 1100 + seed * 1.7) * 0.0011;
@@ -288,9 +294,20 @@ function tickGrid(config: GridConfig, prevTick: GridTick | undefined, nowMs: num
   const price = prevPrice + (targetPrice - prevPrice) * 0.18;
 
   const changePercent = ((price - config.basePrice) / config.basePrice) * 100 + config.baseChangePercent;
-  const unrealizedPnL = config.active
-    ? config.margin * (config.unrealizedPnL + Math.sin(nowMs / 4200 + seed) * 0.01)
-    : 0;
+
+  // Real-leverage P&L: the underlying price-move return is multiplied by the
+  // user's chosen leverage (so 10x leverage swings 10x as hard for any given
+  // tick), plus a small unleveraged synthetic component so each grid has
+  // its own slight bias and the simulation stays bounded.
+  const priceMoveFraction = (price - config.basePrice) / config.basePrice;
+  // Use the *live* leverage from the active config so editing leverage while
+  // the trader is running affects open positions immediately, rather than
+  // staying frozen at the value the grid was opened with.
+  const leverage = Math.max(1, liveLeverage || config.leverage);
+  const leveragedReturn = priceMoveFraction * leverage;
+  const syntheticBias = config.unrealizedPnL + Math.sin(nowMs / 4200 + seed) * 0.01;
+  const pnlFraction = leveragedReturn + syntheticBias;
+  const unrealizedPnL = config.active ? config.margin * pnlFraction : 0;
   const realizedPnL = config.margin * config.realizedPnL + Math.sin(nowMs / 9100 + seed * 0.6) * 0.05;
 
   const fillJitter = Math.floor((Math.sin(nowMs / 6500 + seed) + 1) * 1.5);
@@ -319,6 +336,33 @@ export default function Assets({ positions, symbols, account, serverTrades, serv
   const [traderProfiles, setTraderProfiles] = useState<Record<AssetClass, TraderProfile>>({} as Record<AssetClass, TraderProfile>);
   const [upgradeBusy, setUpgradeBusy] = useState(false);
 
+  // Debounced server save of preference fields the user can edit while the
+  // trader is running (leverage, take-profit, stop-loss, auto-close). Local
+  // state and localStorage update synchronously so the simulation responds
+  // immediately; the API call is throttled to avoid spamming.
+  const liveSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleLiveConfigChange = (next: TraderConfig) => {
+    setConfig(next);
+    try {
+      window.localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(next));
+    } catch { /* ignore */ }
+    if (isGuest) return;
+    if (liveSaveTimer.current) clearTimeout(liveSaveTimer.current);
+    liveSaveTimer.current = setTimeout(() => {
+      void tradingService.updatePreferences(uid, {
+        leverage: next.leverage,
+        take_profit_percent: next.takeProfitPercent,
+        emergency_stop_percent: next.emergencyStopPercent,
+        auto_close_enabled: next.autoCloseEnabled,
+      }).catch((err) => {
+        console.error('Failed to persist live settings:', err);
+      });
+    }, 500);
+  };
+  useEffect(() => () => {
+    if (liveSaveTimer.current) clearTimeout(liveSaveTimer.current);
+  }, []);
+
   // Hydrate config + running flag + asset class from the server preferences
   // on mount, so the trader picks up where the user left off across devices.
   useEffect(() => {
@@ -345,7 +389,11 @@ export default function Assets({ positions, symbols, account, serverTrades, serv
         takeProfitPercent: prefs.take_profit_percent ?? DEFAULT_CONFIG.takeProfitPercent,
         walletExposurePercent: prefs.wallet_exposure_percent ?? DEFAULT_CONFIG.walletExposurePercent,
         emergencyStopPercent: prefs.emergency_stop_percent ?? DEFAULT_CONFIG.emergencyStopPercent,
-        maxOpenPositions: prefs.max_open_positions ?? DEFAULT_CONFIG.maxOpenPositions,
+        maxOpenPositions: clamp(
+          prefs.max_open_positions ?? DEFAULT_CONFIG.maxOpenPositions,
+          MAX_OPEN_POSITIONS_MIN,
+          MAX_OPEN_POSITIONS_MAX,
+        ),
         autoCloseEnabled: prefs.auto_close_enabled ?? DEFAULT_CONFIG.autoCloseEnabled,
       };
       setConfig(next);
@@ -529,6 +577,7 @@ export default function Assets({ positions, symbols, account, serverTrades, serv
         onStop={handleStop}
         onSwitchTrader={handleSwitchTrader}
         busy={busy}
+        onConfigChange={handleLiveConfigChange}
       />
     );
   }
@@ -1180,7 +1229,11 @@ function SetupForm({
           />
         </FieldCard>
 
-        <FieldCard icon={<WalletIcon size={16} className="text-yellow-400" />} label="Wallet Exposure" hint="Max capital to use across all positions">
+        <FieldCard
+          icon={<WalletIcon size={16} className="text-yellow-400" />}
+          label="Wallet Allocation"
+          hint="Share of your wallet the AI trader is allowed to deploy as margin across all open positions combined. Higher = more capital at risk."
+        >
           <NumberInput
             value={config.walletExposurePercent}
             min={1}
@@ -1190,6 +1243,11 @@ function SetupForm({
             onChange={(v) => setConfig({ ...config, walletExposurePercent: v })}
             suffix="%"
           />
+          <p className="text-[10px] text-yellow-300/80 mt-2 leading-relaxed">
+            e.g. <span className="font-mono">25%</span> of a <span className="font-mono">$1,000</span> wallet
+            allocates up to <span className="font-mono">$250</span> as margin — split evenly across your
+            Max Open Positions. The remainder stays as free cash.
+          </p>
         </FieldCard>
 
         <FieldCard icon={<ShieldAlert size={16} className="text-yellow-400" />} label="Stop Loss" hint="Halt all trading once this loss % is hit">
@@ -1203,11 +1261,15 @@ function SetupForm({
           />
         </FieldCard>
 
-        <FieldCard icon={<Sliders size={16} className="text-yellow-400" />} label="Max Open Positions" hint="Simultaneous grid positions">
+        <FieldCard
+          icon={<Sliders size={16} className="text-yellow-400" />}
+          label="Max Open Positions"
+          hint={`Trader-plan range: ${MAX_OPEN_POSITIONS_MIN}–${MAX_OPEN_POSITIONS_MAX} simultaneous grid positions.`}
+        >
           <NumberInput
             value={config.maxOpenPositions}
-            min={1}
-            max={20}
+            min={MAX_OPEN_POSITIONS_MIN}
+            max={MAX_OPEN_POSITIONS_MAX}
             step={1}
             integer
             onChange={(v) => setConfig({ ...config, maxOpenPositions: v })}
@@ -1420,6 +1482,7 @@ function RunningTrader({
   onStop,
   onSwitchTrader,
   busy,
+  onConfigChange,
 }: {
   config: TraderConfig;
   assetType: AssetClass;
@@ -1435,7 +1498,16 @@ function RunningTrader({
   onStop: () => void | Promise<void>;
   onSwitchTrader: () => void | Promise<void>;
   busy: boolean;
+  onConfigChange?: (next: TraderConfig) => void;
 }) {
+  // Live editor state for the in-flight settings card. Edits here flow up
+  // through onConfigChange and are also fed into configRef (below) on the
+  // next render, so the simulation loop picks them up immediately.
+  const liveSettings = config;
+  const updateLive = (patch: Partial<TraderConfig>) => {
+    if (!onConfigChange) return;
+    onConfigChange({ ...config, ...patch });
+  };
   const [tab, setTab] = useState<'detail' | 'history'>('detail');
 
   // Only surface trades that occurred in the *current* bot session.
@@ -1577,6 +1649,7 @@ function RunningTrader({
             grid,
             ticksRef.current[grid.id],
             nowMs,
+            cfg.leverage,
             assetType === 'crypto' ? liveMarketPricesRef.current[grid.symbol] : undefined,
           );
           const pnlPct = grid.margin > 0 ? tick.unrealizedPnL / grid.margin : 0;
@@ -1584,9 +1657,13 @@ function RunningTrader({
           const ageMs = Date.now() - grid.openedAt;
           const eligible = ageMs > 4000 && !halted;
 
-          // Auto-close on take profit (if enabled) or emergency stop loss.
-          const hitTP = cfg.autoCloseEnabled && pnlPct >= grid.closeThreshold;
-          const hitStop = pnlPct <= grid.stopThreshold;
+          // Use the *live* take-profit / stop-loss from the active config so
+          // edits to those thresholds while the trader is running affect open
+          // grids on the very next tick — not just newly-opened ones.
+          const liveCloseThreshold = cfg.takeProfitPercent / 100;
+          const liveStopThreshold = -(cfg.emergencyStopPercent / 100);
+          const hitTP = cfg.autoCloseEnabled && pnlPct >= liveCloseThreshold;
+          const hitStop = pnlPct <= liveStopThreshold;
 
           if (eligible && (hitTP || hitStop)) {
             const outcome: 'win' | 'loss' = pnlPct >= 0 ? 'win' : 'loss';
@@ -1789,7 +1866,7 @@ function RunningTrader({
             </div>
           )}
           <div className="text-xs text-zinc-500">
-            {config.leverage}x · TP +{config.takeProfitPercent}% · Stop -{config.emergencyStopPercent}% · Exposure {config.walletExposurePercent}% · Comm. {profile?.commission_percent ?? 20}%
+            {config.leverage}x · TP +{config.takeProfitPercent}% · Stop -{config.emergencyStopPercent}% · Allocation {config.walletExposurePercent}% · Comm. {profile?.commission_percent ?? 20}%
             {!config.autoCloseEnabled && ' · Auto-close OFF'}
             {assetType === 'crypto' && ' · WebSocket feed'}
           </div>
@@ -1820,6 +1897,86 @@ function RunningTrader({
         </div>
       </div>
 
+      {/* Live settings — fields editable without stopping the bot. Changes
+          take effect on the next tick (≤ 750ms). Slot count and wallet
+          allocation are locked here because they're baked into the grid
+          layout — use Stop & Reconfigure to change them. */}
+      {onConfigChange && (
+        <div className="rounded-2xl border border-zinc-800/60 bg-zinc-900/30 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Sliders size={14} className="text-yellow-400" />
+              <p className="text-[11px] uppercase tracking-[0.22em] font-bold text-zinc-200">Live Settings</p>
+              <span className="text-[10px] text-zinc-500">applies on next tick</span>
+            </div>
+            <span className="text-[10px] text-zinc-500 hidden sm:inline">
+              Locked while running: <span className="text-zinc-400">Max Positions, Wallet Allocation</span>
+            </span>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <label className="block">
+              <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold flex items-center gap-1.5"><Zap size={11} className="text-yellow-400" /> Leverage</span>
+              <div className="mt-1 flex items-center gap-1">
+                <input
+                  type="number"
+                  min={1}
+                  max={100}
+                  step={1}
+                  value={liveSettings.leverage}
+                  onChange={(e) => updateLive({ leverage: clamp(parseInt(e.target.value || '1', 10), 1, 100) })}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-sm font-mono text-white focus:outline-none focus:border-yellow-500/50"
+                />
+                <span className="text-zinc-500 text-xs">x</span>
+              </div>
+            </label>
+            <label className="block">
+              <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold flex items-center gap-1.5"><TrendingUp size={11} className="text-yellow-400" /> Take Profit</span>
+              <div className="mt-1 flex items-center gap-1">
+                <input
+                  type="number"
+                  min={0.1}
+                  max={50}
+                  step={0.1}
+                  value={liveSettings.takeProfitPercent}
+                  onChange={(e) => updateLive({ takeProfitPercent: clamp(parseFloat(e.target.value || '0'), 0.1, 50) })}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-sm font-mono text-white focus:outline-none focus:border-yellow-500/50"
+                />
+                <span className="text-zinc-500 text-xs">%</span>
+              </div>
+            </label>
+            <label className="block">
+              <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold flex items-center gap-1.5"><ShieldAlert size={11} className="text-yellow-400" /> Stop Loss</span>
+              <div className="mt-1 flex items-center gap-1">
+                <input
+                  type="number"
+                  min={0.1}
+                  max={50}
+                  step={0.1}
+                  value={liveSettings.emergencyStopPercent}
+                  onChange={(e) => updateLive({ emergencyStopPercent: clamp(parseFloat(e.target.value || '0'), 0.1, 50) })}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-sm font-mono text-white focus:outline-none focus:border-yellow-500/50"
+                />
+                <span className="text-zinc-500 text-xs">%</span>
+              </div>
+            </label>
+            <div className="flex items-center justify-between bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2">
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Auto-Close</p>
+                <p className="text-[10px] text-zinc-500">TP/SL fires automatically</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => updateLive({ autoCloseEnabled: !liveSettings.autoCloseEnabled })}
+                className={`w-10 h-6 rounded-full transition-all flex-shrink-0 ${liveSettings.autoCloseEnabled ? 'bg-yellow-500' : 'bg-zinc-700'}`}
+                aria-pressed={liveSettings.autoCloseEnabled}
+              >
+                <div className={`w-5 h-5 rounded-full bg-white shadow transform transition-transform ${liveSettings.autoCloseEnabled ? 'translate-x-4' : 'translate-x-0.5'}`} />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {emergencyHalted && (
         <div className="rounded-xl border border-rose-500/30 bg-rose-500/[0.06] p-4 flex items-start gap-3">
           <AlertTriangle size={18} className="text-rose-400 flex-shrink-0 mt-0.5" />
@@ -1839,7 +1996,7 @@ function RunningTrader({
                 <div>
                   <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold">Wallet</p>
                   <p className="mt-1 text-2xl font-mono text-white">{formatMoney(wallet)}</p>
-                  <p className="mt-1 text-[10px] text-yellow-300/80 font-bold">{exposurePercent.toFixed(1)}% exposed</p>
+                  <p className="mt-1 text-[10px] text-yellow-300/80 font-bold">{exposurePercent.toFixed(1)}% allocated</p>
                 </div>
                 <div>
                   <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold">PNL (Realized)</p>
@@ -2057,7 +2214,7 @@ function DetailPane({
 
       <div className="rounded-2xl bg-zinc-900/40 border border-zinc-800/60 px-6 py-5">
         <div className="flex items-center justify-between">
-          <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500 font-bold">Wallet Exposure</p>
+          <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500 font-bold">Wallet Allocation</p>
           <p className="text-yellow-400 font-mono text-sm">{grid.exposurePercent.toFixed(1)}%</p>
         </div>
         <div className="mt-3 h-1.5 rounded-full bg-zinc-800 overflow-hidden">
@@ -2078,7 +2235,7 @@ function DetailPane({
           <ParamRow label="Leverage" value={`${grid.leverage}x`} />
           <ParamRow label="Order Size" value={formatMoney(orderSize)} />
           <ParamRow label="Allocated Margin" value={formatMoney(grid.margin)} />
-          <ParamRow label="Wallet Exposure" value={`${grid.exposurePercent.toFixed(1)}%`} valueClassName="text-yellow-400" />
+          <ParamRow label="Wallet Allocation" value={`${grid.exposurePercent.toFixed(1)}%`} valueClassName="text-yellow-400" />
           <ParamRow label="Take Profit" value={`+${(grid.closeThreshold * 100).toFixed(2)}%`} valueClassName="text-yellow-400" />
           <ParamRow label="Stop Loss" value={`${(grid.stopThreshold * 100).toFixed(2)}%`} valueClassName="text-rose-400" />
           <ParamRow label="Grid Levels" value={grid.totalLevels.toString()} />

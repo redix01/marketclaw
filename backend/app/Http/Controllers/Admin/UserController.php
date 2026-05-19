@@ -49,7 +49,7 @@ class UserController extends Controller
                 'is_admin' => $validated['is_admin'] ?? false,
             ]);
 
-            $account = $this->ensurePaperAccount->handle($user, (float) ($validated['initial_balance'] ?? 10000));
+            $account = $this->ensurePaperAccount->handle($user, (float) ($validated['initial_balance'] ?? 0));
             $user->setRelation('paperAccount', $account);
 
             return $user;

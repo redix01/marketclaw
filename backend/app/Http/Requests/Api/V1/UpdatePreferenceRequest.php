@@ -28,7 +28,7 @@ class UpdatePreferenceRequest extends FormRequest
             'take_profit_percent' => ['sometimes', 'numeric', 'min:0.1', 'max:50'],
             'wallet_exposure_percent' => ['sometimes', 'integer', 'min:1', 'max:100'],
             'emergency_stop_percent' => ['sometimes', 'numeric', 'min:0.1', 'max:50'],
-            'max_open_positions' => ['sometimes', 'integer', 'min:1', 'max:20'],
+            'max_open_positions' => ['sometimes', 'integer', 'min:10', 'max:30'],
             'auto_close_enabled' => ['sometimes', 'boolean'],
             'bot_asset_type' => ['sometimes', 'nullable', 'string', 'in:stock,crypto'],
             'commission_percent' => ['sometimes', 'numeric', 'min:0', 'max:100'],

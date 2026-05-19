@@ -1,15 +1,20 @@
-import React from 'react';
-import { Briefcase, TrendingUp, TrendingDown, PieChart, Activity, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import React, { useState } from 'react';
+import { Briefcase, ArrowUpRight, ArrowDownRight, X, Loader2 } from 'lucide-react';
 import { Position, Account } from '../types';
 import { SymbolInfo } from '../types';
+import { tradingService } from '../services/tradingService';
 
 interface PortfolioProps {
+  user: any;
   account: Account | null;
   positions: Position[];
   symbols: SymbolInfo[];
 }
 
-export default function Portfolio({ account, positions, symbols }: PortfolioProps) {
+export default function Portfolio({ user, account, positions, symbols }: PortfolioProps) {
+  const [closingId, setClosingId] = useState<string | null>(null);
+  const [closeError, setCloseError] = useState<string | null>(null);
+  const [confirmCloseId, setConfirmCloseId] = useState<string | null>(null);
   const liveSymbols = symbols.length > 0 ? symbols : [];
 
   const holdingsValue = positions.reduce((acc, pos) => {
@@ -24,6 +29,22 @@ export default function Portfolio({ account, positions, symbols }: PortfolioProp
     const dayChange = (symbolInfo?.change ?? 0) * pos.quantity;
     return acc + dayChange;
   }, 0);
+
+  const handleClose = async (pos: Position) => {
+    if (!user?.uid) return;
+    setCloseError(null);
+    setClosingId(pos.id);
+    try {
+      const symbolInfo = liveSymbols.find((s) => s.symbol === pos.symbol);
+      const exitPrice = pos.currentPrice ?? symbolInfo?.price ?? pos.averageEntryPrice;
+      await tradingService.placeOrder(user.uid, pos.symbol, 'sell', pos.quantity, exitPrice, pos.assetType);
+      setConfirmCloseId(null);
+    } catch (err: any) {
+      setCloseError(err?.message || 'Failed to close position.');
+    } finally {
+      setClosingId(null);
+    }
+  };
 
   const totalPL = positions.reduce((acc, pos) => {
     const symbolInfo = liveSymbols.find(s => s.symbol === pos.symbol);
@@ -65,6 +86,11 @@ export default function Portfolio({ account, positions, symbols }: PortfolioProp
           <Briefcase size={20} className="text-yellow-400" />
           <h3 className="text-lg font-bold">Your Holdings</h3>
         </div>
+        {closeError && (
+          <div className="px-6 py-3 border-b border-rose-500/20 bg-rose-500/10 text-rose-300 text-xs">
+            {closeError}
+          </div>
+        )}
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead>
@@ -76,6 +102,7 @@ export default function Portfolio({ account, positions, symbols }: PortfolioProp
                 <th className="px-6 py-4">Market Price</th>
                 <th className="px-6 py-4">Market Value</th>
                 <th className="px-6 py-4 text-right">Unrealized P/L</th>
+                <th className="px-6 py-4 text-right">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-800/50">
@@ -109,12 +136,50 @@ export default function Portfolio({ account, positions, symbols }: PortfolioProp
                       {pl >= 0 ? '+' : ''}{pl.toFixed(2)}
                       <span className="block text-[10px] opacity-70">{plPercent.toFixed(2)}%</span>
                     </td>
+                    <td className="px-6 py-4 text-right">
+                      {confirmCloseId === pos.id ? (
+                        <div className="inline-flex items-center gap-2 justify-end">
+                          <button
+                            onClick={() => handleClose(pos)}
+                            disabled={closingId === pos.id}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-500 hover:bg-rose-400 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold transition-colors"
+                            title="Confirm close at current market price"
+                          >
+                            {closingId === pos.id ? (
+                              <Loader2 size={14} className="animate-spin" />
+                            ) : (
+                              <X size={14} />
+                            )}
+                            Confirm
+                          </button>
+                          <button
+                            onClick={() => setConfirmCloseId(null)}
+                            disabled={closingId === pos.id}
+                            className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-bold transition-colors"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            setCloseError(null);
+                            setConfirmCloseId(pos.id);
+                          }}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-rose-500/20 hover:text-rose-300 border border-zinc-700 hover:border-rose-500/40 text-zinc-300 text-xs font-bold transition-colors"
+                          title="Close this position at market price"
+                        >
+                          <X size={14} />
+                          Close
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 );
               })}
               {positions.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-zinc-500 italic">
+                  <td colSpan={8} className="px-6 py-12 text-center text-zinc-500 italic">
                     You don't have any open positions.
                   </td>
                 </tr>

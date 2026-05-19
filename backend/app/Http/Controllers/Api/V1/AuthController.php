@@ -11,6 +11,8 @@ use App\Support\Api\FrontendPayload;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Password;
+use Illuminate\Validation\Rules\Password as PasswordRule;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
@@ -24,7 +26,9 @@ class AuthController extends Controller
             'status' => 'active',
         ]);
 
-        $account = $ensurePaperAccount->handle($user);
+        // New self-registered accounts start at $0.00. The user must fund
+        // their wallet via the deposit flow before they can trade.
+        $account = $ensurePaperAccount->handle($user, 0.0);
         $user->loadMissing('preferences');
         $token = $user->createToken('web')->plainTextToken;
 
@@ -49,7 +53,10 @@ class AuthController extends Controller
             ]);
         }
 
-        $account = $ensurePaperAccount->handle($user);
+        // If the user somehow has no paper account yet, ensure one — but
+        // create it empty so the user must explicitly deposit to receive
+        // any starting balance.
+        $account = $ensurePaperAccount->handle($user, 0.0);
         $user->loadMissing('preferences');
         $token = $user->createToken('web')->plainTextToken;
 
@@ -70,6 +77,46 @@ class AuthController extends Controller
 
         return response()->json([
             'message' => 'Logged out successfully.',
+        ]);
+    }
+
+    public function forgotPassword(Request $request): JsonResponse
+    {
+        $request->validate([
+            'email' => ['required', 'email'],
+        ]);
+
+        Password::sendResetLink($request->only('email'));
+
+        return response()->json([
+            'message' => 'If an account exists for that email, a password reset link has been sent.',
+        ]);
+    }
+
+    public function resetPassword(Request $request): JsonResponse
+    {
+        $request->validate([
+            'token' => ['required', 'string'],
+            'email' => ['required', 'email'],
+            'password' => ['required', 'confirmed', PasswordRule::min(8)],
+        ]);
+
+        $status = Password::reset(
+            $request->only('email', 'password', 'password_confirmation', 'token'),
+            function (User $user, string $password): void {
+                $user->forceFill(['password' => $password])->save();
+                $user->tokens()->delete();
+            }
+        );
+
+        if ($status !== Password::PASSWORD_RESET) {
+            throw ValidationException::withMessages([
+                'email' => [__($status)],
+            ]);
+        }
+
+        return response()->json([
+            'message' => 'Your password has been reset successfully.',
         ]);
     }
 }

@@ -21,15 +21,20 @@ class EnsurePaperAccount
                 'status' => 'active',
             ]);
 
-            $account->ledgerEntries()->create([
-                'user_id' => $user->id,
-                'type' => 'deposit',
-                'amount' => $initialBalance,
-                'description' => 'Initial paper trading funds',
-                'meta' => [
-                    'source' => 'system',
-                ],
-            ]);
+            // Only record an opening deposit if there was actually one. Self-
+            // registered users now start at $0.00 (see AuthController) — the
+            // user must deposit funds via the wallet before they can trade.
+            if ($initialBalance > 0) {
+                $account->ledgerEntries()->create([
+                    'user_id' => $user->id,
+                    'type' => 'deposit',
+                    'amount' => $initialBalance,
+                    'description' => 'Initial paper trading funds',
+                    'meta' => [
+                        'source' => 'system',
+                    ],
+                ]);
+            }
         }
 
         if (! $user->preferences) {
@@ -46,7 +51,7 @@ class EnsurePaperAccount
                 'take_profit_percent' => 2.0,
                 'wallet_exposure_percent' => 25,
                 'emergency_stop_percent' => 5.0,
-                'max_open_positions' => 5,
+                'max_open_positions' => 10,
                 'auto_close_enabled' => true,
                 'bot_running' => false,
                 'bot_asset_type' => null,

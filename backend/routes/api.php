@@ -21,6 +21,8 @@ Route::prefix('v1')->group(function (): void {
     Route::get('/health', HealthController::class);
     Route::post('/auth/register', [AuthController::class, 'register']);
     Route::post('/auth/login', [AuthController::class, 'login']);
+    Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword']);
+    Route::post('/auth/reset-password', [AuthController::class, 'resetPassword']);
     Route::get('/markets/symbols', [MarketController::class, 'symbols']);
     Route::get('/payment-methods', [PaymentMethodController::class, 'index']);
 
