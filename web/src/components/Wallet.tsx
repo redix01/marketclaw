@@ -18,9 +18,10 @@ interface WalletProps {
   account: Account | null;
   ledger: LedgerEvent[];
   basePath: '/app' | '/demo';
+  totalEquity: number;
 }
 
-export default function Wallet({ user, account, ledger, basePath }: WalletProps) {
+export default function Wallet({ user, account, ledger, basePath, totalEquity }: WalletProps) {
   const navigate = useNavigate();
   const [amount, setAmount] = useState<string>('');
   const [loading, setLoading] = useState(false);
@@ -68,12 +69,16 @@ export default function Wallet({ user, account, ledger, basePath }: WalletProps)
           <div className="relative z-10">
             <div className="flex justify-between items-start mb-8">
               <div>
-                <p className="text-xs font-bold uppercase tracking-widest opacity-70 mb-1">Available Cash</p>
-                <h2 className="text-3xl sm:text-4xl md:text-5xl font-mono font-bold">${account?.cashBalance?.toLocaleString(undefined, { minimumFractionDigits: 2 }) || '0.00'}</h2>
+                <p className="text-xs font-bold uppercase tracking-widest opacity-70 mb-1">Total Balance</p>
+                <h2 className="text-3xl sm:text-4xl md:text-5xl font-mono font-bold">${totalEquity.toLocaleString(undefined, { minimumFractionDigits: 2 })}</h2>
               </div>
               <WalletIcon size={40} className="opacity-30" />
             </div>
             <div className="grid grid-cols-2 gap-8">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest opacity-70 mb-1">Available Cash</p>
+                <p className="text-xl font-mono font-bold">${account?.cashBalance?.toLocaleString(undefined, { minimumFractionDigits: 2 }) || '0.00'}</p>
+              </div>
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-widest opacity-70 mb-1">Total Deposits</p>
                 <p className="text-xl font-mono font-bold">${account?.totalDeposits?.toLocaleString() || '0.00'}</p>

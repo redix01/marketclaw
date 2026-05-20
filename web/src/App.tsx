@@ -86,6 +86,10 @@ function DashboardShell({
   const { tab } = useParams();
   const activeTab = normalizeTab(tab);
   const { account, positions, orders, ledger, dashboard, preferences, agents, logs, symbols, closedTrades, closedTradesSummary } = useTradingData(user);
+  const holdingsValue = positions.reduce((sum, position) => (
+    sum + (position.marketValue ?? position.quantity * (position.currentPrice ?? position.averageEntryPrice))
+  ), 0);
+  const totalEquity = dashboard?.summary.totalEquity ?? ((account?.cashBalance ?? 0) + holdingsValue);
 
   const renderContent = () => {
     switch (activeTab) {
@@ -96,7 +100,7 @@ function DashboardShell({
       case 'ai-trader':
         return <Assets basePath={basePath} positions={positions} symbols={symbols} account={account} serverTrades={closedTrades} serverTradesSummary={closedTradesSummary} user={user} />;
       case 'wallet':
-        return <Wallet user={user} account={account} ledger={ledger} basePath={basePath} />;
+        return <Wallet user={user} account={account} ledger={ledger} basePath={basePath} totalEquity={totalEquity} />;
       case 'settings':
         return <Settings user={user} />;
       default:
@@ -110,6 +114,7 @@ function DashboardShell({
       basePath={basePath}
       user={user}
       account={account}
+      totalEquity={totalEquity}
       isGuest={isGuest}
       onExitGuest={onExitGuest}
       onLogout={onLogout}
@@ -143,6 +148,7 @@ function WalletDepositShell({
   onLogout?: () => void;
 }) {
   const { account } = useTradingData(user);
+  const totalEquity = account?.cashBalance ?? 0;
 
   return (
     <Layout
@@ -150,6 +156,7 @@ function WalletDepositShell({
       basePath={basePath}
       user={user}
       account={account}
+      totalEquity={totalEquity}
       isGuest={isGuest}
       onExitGuest={onExitGuest}
       onLogout={onLogout}

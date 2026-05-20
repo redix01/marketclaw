@@ -40,6 +40,7 @@ interface LayoutProps {
   basePath: string;
   user: any;
   account: any;
+  totalEquity?: number;
   isGuest?: boolean;
   onExitGuest?: () => void;
   onLogout?: () => void;

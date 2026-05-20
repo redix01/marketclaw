@@ -1791,7 +1791,8 @@ function RunningTrader({
 
   const totalMargin = enriched.reduce((sum, entry) => sum + entry.grid.margin, 0);
   const totalUnrealized = enriched.reduce((sum, entry) => sum + entry.unrealizedPnL, 0);
-  const exposurePercent = wallet > 0 ? clamp((totalMargin / wallet) * 100, 0, 100) : 0;
+  const totalEquity = wallet + totalMargin;
+  const exposurePercent = totalEquity > 0 ? clamp((totalMargin / totalEquity) * 100, 0, 100) : 0;
   const activeCount = enriched.filter((entry) => entry.grid.active).length;
 
   // "Closed trades" must reflect real positions that hit TP or stop loss in

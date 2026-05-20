@@ -196,6 +196,16 @@ class BotLifecycleTest extends TestCase
             ->assertJsonPath('data.0.auto_closed', true)
             ->assertJsonPath('data.0.close_reason', 'stop_loss');
 
+        $this->getJson('/api/v1/users/'.$user->id.'/account')
+            ->assertOk()
+            ->assertJsonPath('data.cash_balance', 940);
+
+        $this->getJson('/api/v1/users/'.$user->id.'/dashboard')
+            ->assertOk()
+            ->assertJsonPath('data.summary.total_equity', 940)
+            ->assertJsonPath('data.summary.holdings_value', 0)
+            ->assertJsonPath('data.summary.unrealized_pl', 0);
+
         $this->assertDatabaseMissing('positions', [
             'paper_account_id' => $account->id,
             'symbol_id' => $symbol->id,

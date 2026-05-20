@@ -108,7 +108,7 @@ export default function Trade({ user, account, positions, symbols }: TradeProps)
           <div className="flex items-center gap-3 px-4 py-2 rounded-xl bg-zinc-900 border border-zinc-800">
             <Wallet size={16} className="text-yellow-400" />
             <div className="flex flex-col leading-tight">
-              <span className="text-[9px] uppercase tracking-wider text-zinc-500 font-bold">Wallet</span>
+              <span className="text-[9px] uppercase tracking-wider text-zinc-500 font-bold">Available Cash</span>
               <span className="text-sm font-mono font-bold text-white">${formatPrice(account?.cashBalance ?? 0)}</span>
             </div>
           </div>
