@@ -2567,12 +2567,20 @@ function ClosedTradesSection({ trades, summary, assetType }: { trades: ClosedTra
       result = result.filter((t) => !t.autoClosed);
     }
 
+    // Numeric tiebreak by id (parsed from the string) keeps the order
+    // deterministic when multiple trades share a key — happens often on
+    // the date sort because many auto-closes can land in the same second.
+    const idNum = (t: ClosedTrade) => Number(t.id) || 0;
+
     if (sortBy === 'pnl') {
-      result.sort((a, b) => b.realizedPnl - a.realizedPnl);
+      result.sort((a, b) => (b.realizedPnl - a.realizedPnl) || (idNum(b) - idNum(a)));
     } else if (sortBy === 'pnl_percent') {
-      result.sort((a, b) => b.pnlPercent - a.pnlPercent);
+      result.sort((a, b) => (b.pnlPercent - a.pnlPercent) || (idNum(b) - idNum(a)));
     } else {
-      result.sort((a, b) => new Date(b.filledAt).getTime() - new Date(a.filledAt).getTime());
+      result.sort((a, b) => {
+        const diff = new Date(b.filledAt).getTime() - new Date(a.filledAt).getTime();
+        return diff !== 0 ? diff : idNum(b) - idNum(a);
+      });
     }
 
     return result;

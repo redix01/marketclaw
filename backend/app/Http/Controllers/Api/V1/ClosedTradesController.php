@@ -39,7 +39,14 @@ class ClosedTradesController extends Controller
                 DB::raw("COALESCE(ledger_entries.meta->>'pnl_percent', '0')::numeric as pnl_percent"),
                 DB::raw("COALESCE(ledger_entries.meta->>'auto_closed', 'false')::boolean as auto_closed")
             )
+            // Stable newest-first ordering. filled_at DESC alone is not
+            // enough because the trader:tick cron can fire dozens of
+            // auto-closes inside a single second — same-second ties were
+            // coming back in physical-row order, which made the dashboard
+            // look shuffled. Order by id DESC as a secondary key so within
+            // a tied second the most-recently-inserted row wins.
             ->orderBy('orders.filled_at', 'desc')
+            ->orderBy('orders.id', 'desc')
             ->get()
             ->map(function ($trade) {
                 $trade->realized_pnl = (float) $trade->realized_pnl;
