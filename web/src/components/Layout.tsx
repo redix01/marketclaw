@@ -8,7 +8,6 @@ import {
   Wallet, 
   Settings,
   Search,
-  Bell,
   User,
   Menu,
   X,
@@ -228,7 +227,7 @@ export default function Layout({ children, activeTab, basePath, user, account, i
           </div>
 
           <div className="flex items-center gap-3 md:gap-6">
-            <div className="hidden sm:flex items-center gap-4 md:gap-6 border-r border-zinc-800 pr-4 md:pr-6 mr-1 md:mr-2">
+            <div className="hidden sm:flex items-center gap-4 md:gap-6">
               <div className="text-right min-w-0">
                 <p className="text-[8px] md:text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Cash Balance</p>
                 <p
@@ -238,16 +237,7 @@ export default function Layout({ children, activeTab, basePath, user, account, i
                   {formatCashBalance(Number(account?.cashBalance ?? 0))}
                 </p>
               </div>
-              <div className="text-right hidden lg:block">
-                <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Account Mode</p>
-                <span className="text-[10px] px-2 py-0.5 bg-zinc-800 text-zinc-300 rounded-full border border-zinc-700 font-bold">PAPER TRADING</span>
-              </div>
             </div>
-            
-            <button className="relative p-2 text-zinc-400 hover:text-zinc-200 transition-colors">
-              <Bell size={20} />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-yellow-500 rounded-full border-2 border-[#0F0F11]"></span>
-            </button>
           </div>
         </header>
 

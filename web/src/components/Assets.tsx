@@ -1589,24 +1589,37 @@ function RunningTrader({
     return () => window.clearInterval(id);
   }, []);
 
-  // Keep open grids in sync with config for fields the dashboard reads
-  // straight off the grid object (leverage, closeThreshold, stopThreshold).
-  // The P&L math already pulls leverage / TP / SL from the live configRef,
-  // but the per-grid detail panels (header chip, ParamRow) used to show
-  // the leverage the grid was *opened* with — so after stop/resume with a
-  // new leverage value the dashboard kept reading "10x" even though the
-  // math was correctly using the new 50x. Patching the grid records here
-  // keeps the visible numbers aligned with the active configuration.
+  // Keep open grids in sync with config for the fields the dashboard reads
+  // straight off the grid object. The P&L math already pulls leverage / TP
+  // / SL from the live configRef, but the per-grid detail panels (header
+  // chip, ParamRow, margin/exposure stat) used to show the values the grid
+  // was *opened* with — so after stop/resume with a new leverage or wallet
+  // allocation the dashboard kept reading the old numbers even though the
+  // math was correctly using the new ones. Patching the grid records here
+  // keeps the visible numbers and the next-tick margin aligned with the
+  // active configuration on every config edit and on every resume.
   useEffect(() => {
     setGrids((prev) => {
+      if (prev.length === 0) return prev;
+
       const liveClose = config.takeProfitPercent / 100;
       const liveStop = -(config.emergencyStopPercent / 100);
+      // Re-derive per-grid margin from the live wallet allocation so editing
+      // either side (wallet_exposure_percent or max_open_positions) and
+      // resuming actually changes how much capital each grid plays with.
+      const walletBalance = account?.cashBalance ?? baseWalletRef.current;
+      const slots = Math.max(config.maxOpenPositions, prev.length, 1);
+      const exposurePerSlot = config.walletExposurePercent / slots;
+      const liveMargin = clamp((walletBalance * exposurePerSlot) / 100, 1, Math.max(walletBalance, 1));
+
       let changed = false;
       const next = prev.map((g) => {
         if (
           g.leverage === config.leverage
           && g.closeThreshold === liveClose
           && g.stopThreshold === liveStop
+          && Math.abs(g.exposurePercent - exposurePerSlot) < 1e-6
+          && Math.abs(g.margin - liveMargin) < 1e-2
         ) {
           return g;
         }
@@ -1616,11 +1629,20 @@ function RunningTrader({
           leverage: config.leverage,
           closeThreshold: liveClose,
           stopThreshold: liveStop,
+          exposurePercent: exposurePerSlot,
+          margin: liveMargin,
         };
       });
       return changed ? next : prev;
     });
-  }, [config.leverage, config.takeProfitPercent, config.emergencyStopPercent]);
+  }, [
+    config.leverage,
+    config.takeProfitPercent,
+    config.emergencyStopPercent,
+    config.walletExposurePercent,
+    config.maxOpenPositions,
+    account?.cashBalance,
+  ]);
 
   const [selectedSymbol, setSelectedSymbol] = useState<string>(
     () => persistedRef.current?.selectedSymbol ?? grids[0]?.symbol ?? ''
@@ -1836,15 +1858,18 @@ function RunningTrader({
   const activeCount = enriched.filter((entry) => entry.grid.active).length;
 
   // "Closed trades" must reflect real positions that hit TP or stop loss in
-  // the ledger — not the local simulation's grid-close animations. Pull from
-  // sessionServerTrades (current session only) filtered to this asset class.
+  // the ledger — not the local simulation's grid-close animations. Use the
+  // *lifetime* serverTrades list (not the session-scoped one) so realized
+  // P&L from individual trades accumulates across stop/resume cycles. The
+  // header number then matches what the wallet has actually compounded.
   const realClosed = useMemo(
-    () => sessionServerTrades.filter((t) => t.assetType === assetType),
-    [sessionServerTrades, assetType]
+    () => serverTrades.filter((t) => t.assetType === assetType),
+    [serverTrades, assetType]
   );
-  // Realized P&L for the current trader is the sum of realized P&L on real
-  // closed trades for this asset class. This is what the wallet has actually
-  // earned from the bot — not the simulated jitter.
+  // Realized P&L for the current trader is the sum of realized P&L on every
+  // real closed trade for this asset class, across all sessions. This is
+  // what the wallet has actually earned from the bot — not the simulated
+  // jitter and not just the trades since the latest start button.
   const realRealizedPnl = useMemo(
     () => realClosed.reduce((sum, t) => sum + t.realizedPnl, 0),
     [realClosed]
@@ -2043,23 +2068,26 @@ function RunningTrader({
           <aside className="border-b lg:border-b-0 lg:border-r border-zinc-800/60 flex flex-col">
             <div className="p-5 border-b border-zinc-800/60">
               <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500 font-bold mb-4">Trading Stats</p>
-              <div className="grid grid-cols-2 gap-3">
+
+              {/* Stacked layout: each value gets the full aside width so big
+                  balances (e.g. $1,234,567.89) and signed P&L numbers no
+                  longer collide with the next column. */}
+              <div className="space-y-4">
                 <div className="min-w-0">
                   <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold">Wallet</p>
                   <p
-                    className="mt-1 font-mono text-white whitespace-nowrap leading-tight"
-                    style={{ fontSize: 'clamp(1rem, 2.4vw, 1.5rem)' }}
+                    className="mt-1 text-2xl font-mono text-white whitespace-nowrap leading-tight truncate"
                     title={formatMoney(wallet)}
                   >
                     {formatMoneyAdaptive(wallet)}
                   </p>
                   <p className="mt-1 text-[10px] text-yellow-300/80 font-bold">{exposurePercent.toFixed(1)}% allocated</p>
                 </div>
+
                 <div className="min-w-0">
                   <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold">PNL (Realized)</p>
                   <p
-                    className={`mt-1 font-mono whitespace-nowrap leading-tight ${realRealizedPnl >= 0 ? 'text-yellow-400' : 'text-rose-400'}`}
-                    style={{ fontSize: 'clamp(1rem, 2.4vw, 1.5rem)' }}
+                    className={`mt-1 text-2xl font-mono whitespace-nowrap leading-tight truncate ${realRealizedPnl >= 0 ? 'text-yellow-400' : 'text-rose-400'}`}
                     title={formatSignedMoney(realRealizedPnl, 2)}
                   >
                     {formatSignedMoneyAdaptive(realRealizedPnl)}
@@ -2068,9 +2096,10 @@ function RunningTrader({
                     {realizedPercent >= 0 ? '+' : ''}{realizedPercent.toFixed(2)}%
                   </p>
                 </div>
-                <div className="col-span-2 grid grid-cols-2 gap-2 mt-1">
-                  <div className="rounded-md bg-yellow-500/10 border border-yellow-500/20 px-2 py-1 min-w-0">
-                    <p className="text-[9px] uppercase tracking-wider text-yellow-400/80 font-bold">R</p>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="rounded-md bg-yellow-500/10 border border-yellow-500/20 px-2 py-1.5 min-w-0">
+                    <p className="text-[9px] uppercase tracking-wider text-yellow-400/80 font-bold">Realized</p>
                     <p
                       className="text-xs font-mono text-yellow-300 truncate"
                       title={formatSignedMoney(realRealizedPnl, 2)}
@@ -2078,8 +2107,8 @@ function RunningTrader({
                       {formatSignedMoneyAdaptive(realRealizedPnl)}
                     </p>
                   </div>
-                  <div className="rounded-md bg-rose-500/10 border border-rose-500/20 px-2 py-1 min-w-0">
-                    <p className="text-[9px] uppercase tracking-wider text-rose-400/80 font-bold">U</p>
+                  <div className="rounded-md bg-rose-500/10 border border-rose-500/20 px-2 py-1.5 min-w-0">
+                    <p className="text-[9px] uppercase tracking-wider text-rose-400/80 font-bold">Unrealized</p>
                     <p
                       className="text-xs font-mono text-rose-300 truncate"
                       title={formatSignedMoney(totalUnrealized, 2)}
