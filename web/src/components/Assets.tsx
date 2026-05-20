@@ -186,6 +186,23 @@ function formatSignedMoney(value: number, digits = 4) {
   return `${sign}$${Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
 }
 
+// Used in tight headers where a 12+ digit balance would overflow the
+// column. Falls back to full notation for anything under $1M so the
+// dashboard stays precise for normal wallets.
+function formatMoneyAdaptive(value: number): string {
+  const abs = Math.abs(value);
+  const sign = value < 0 ? '-' : '';
+  if (abs >= 1_000_000_000) return `${sign}$${(abs / 1_000_000_000).toFixed(2)}B`;
+  if (abs >= 10_000_000) return `${sign}$${(abs / 1_000_000).toFixed(1)}M`;
+  if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(2)}M`;
+  return `${sign}$${abs.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function formatSignedMoneyAdaptive(value: number): string {
+  const sign = value >= 0 ? '+' : '-';
+  return `${sign}${formatMoneyAdaptive(Math.abs(value)).replace(/^-/, '')}`;
+}
+
 function formatDuration(totalMinutes: number) {
   const minutes = Math.max(0, Math.floor(totalMinutes));
   const hours = Math.floor(minutes / 60);
@@ -1508,6 +1525,7 @@ function RunningTrader({
     if (!onConfigChange) return;
     onConfigChange({ ...config, ...patch });
   };
+
   const [tab, setTab] = useState<'detail' | 'history'>('detail');
 
   // Only surface trades that occurred in the *current* bot session.
@@ -1570,6 +1588,39 @@ function RunningTrader({
     const id = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(id);
   }, []);
+
+  // Keep open grids in sync with config for fields the dashboard reads
+  // straight off the grid object (leverage, closeThreshold, stopThreshold).
+  // The P&L math already pulls leverage / TP / SL from the live configRef,
+  // but the per-grid detail panels (header chip, ParamRow) used to show
+  // the leverage the grid was *opened* with — so after stop/resume with a
+  // new leverage value the dashboard kept reading "10x" even though the
+  // math was correctly using the new 50x. Patching the grid records here
+  // keeps the visible numbers aligned with the active configuration.
+  useEffect(() => {
+    setGrids((prev) => {
+      const liveClose = config.takeProfitPercent / 100;
+      const liveStop = -(config.emergencyStopPercent / 100);
+      let changed = false;
+      const next = prev.map((g) => {
+        if (
+          g.leverage === config.leverage
+          && g.closeThreshold === liveClose
+          && g.stopThreshold === liveStop
+        ) {
+          return g;
+        }
+        changed = true;
+        return {
+          ...g,
+          leverage: config.leverage,
+          closeThreshold: liveClose,
+          stopThreshold: liveStop,
+        };
+      });
+      return changed ? next : prev;
+    });
+  }, [config.leverage, config.takeProfitPercent, config.emergencyStopPercent]);
 
   const [selectedSymbol, setSelectedSymbol] = useState<string>(
     () => persistedRef.current?.selectedSymbol ?? grids[0]?.symbol ?? ''
@@ -1993,28 +2044,48 @@ function RunningTrader({
             <div className="p-5 border-b border-zinc-800/60">
               <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500 font-bold mb-4">Trading Stats</p>
               <div className="grid grid-cols-2 gap-3">
-                <div>
+                <div className="min-w-0">
                   <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold">Wallet</p>
-                  <p className="mt-1 text-2xl font-mono text-white">{formatMoney(wallet)}</p>
+                  <p
+                    className="mt-1 font-mono text-white whitespace-nowrap leading-tight"
+                    style={{ fontSize: 'clamp(1rem, 2.4vw, 1.5rem)' }}
+                    title={formatMoney(wallet)}
+                  >
+                    {formatMoneyAdaptive(wallet)}
+                  </p>
                   <p className="mt-1 text-[10px] text-yellow-300/80 font-bold">{exposurePercent.toFixed(1)}% allocated</p>
                 </div>
-                <div>
+                <div className="min-w-0">
                   <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold">PNL (Realized)</p>
-                  <p className={`mt-1 text-2xl font-mono ${realRealizedPnl >= 0 ? 'text-yellow-400' : 'text-rose-400'}`}>
-                    {formatSignedMoney(realRealizedPnl, 2)}
+                  <p
+                    className={`mt-1 font-mono whitespace-nowrap leading-tight ${realRealizedPnl >= 0 ? 'text-yellow-400' : 'text-rose-400'}`}
+                    style={{ fontSize: 'clamp(1rem, 2.4vw, 1.5rem)' }}
+                    title={formatSignedMoney(realRealizedPnl, 2)}
+                  >
+                    {formatSignedMoneyAdaptive(realRealizedPnl)}
                   </p>
                   <p className={`mt-1 text-[10px] font-bold ${realRealizedPnl >= 0 ? 'text-yellow-400/80' : 'text-rose-400/80'}`}>
                     {realizedPercent >= 0 ? '+' : ''}{realizedPercent.toFixed(2)}%
                   </p>
                 </div>
                 <div className="col-span-2 grid grid-cols-2 gap-2 mt-1">
-                  <div className="rounded-md bg-yellow-500/10 border border-yellow-500/20 px-2 py-1">
+                  <div className="rounded-md bg-yellow-500/10 border border-yellow-500/20 px-2 py-1 min-w-0">
                     <p className="text-[9px] uppercase tracking-wider text-yellow-400/80 font-bold">R</p>
-                    <p className="text-xs font-mono text-yellow-300">{formatSignedMoney(realRealizedPnl, 2)}</p>
+                    <p
+                      className="text-xs font-mono text-yellow-300 truncate"
+                      title={formatSignedMoney(realRealizedPnl, 2)}
+                    >
+                      {formatSignedMoneyAdaptive(realRealizedPnl)}
+                    </p>
                   </div>
-                  <div className="rounded-md bg-rose-500/10 border border-rose-500/20 px-2 py-1">
+                  <div className="rounded-md bg-rose-500/10 border border-rose-500/20 px-2 py-1 min-w-0">
                     <p className="text-[9px] uppercase tracking-wider text-rose-400/80 font-bold">U</p>
-                    <p className="text-xs font-mono text-rose-300">{formatSignedMoney(totalUnrealized, 2)}</p>
+                    <p
+                      className="text-xs font-mono text-rose-300 truncate"
+                      title={formatSignedMoney(totalUnrealized, 2)}
+                    >
+                      {formatSignedMoneyAdaptive(totalUnrealized)}
+                    </p>
                   </div>
                 </div>
               </div>

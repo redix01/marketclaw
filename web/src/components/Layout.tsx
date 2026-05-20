@@ -22,6 +22,19 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+// Compact-but-precise cash balance for the top header. Full $-with-cents
+// notation up to $1M; switches to "$1.23M" / "$12.5M" / "$1.23B" once the
+// number would otherwise overflow the narrow header cell. The full value
+// is still available on hover via the `title` attribute.
+function formatCashBalance(value: number): string {
+  const abs = Math.abs(value);
+  const sign = value < 0 ? '-' : '';
+  if (abs >= 1_000_000_000) return `${sign}$${(abs / 1_000_000_000).toFixed(2)}B`;
+  if (abs >= 10_000_000) return `${sign}$${(abs / 1_000_000).toFixed(1)}M`;
+  if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(2)}M`;
+  return `${sign}$${abs.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
 interface LayoutProps {
   children: React.ReactNode;
   activeTab: string;
@@ -216,9 +229,14 @@ export default function Layout({ children, activeTab, basePath, user, account, i
 
           <div className="flex items-center gap-3 md:gap-6">
             <div className="hidden sm:flex items-center gap-4 md:gap-6 border-r border-zinc-800 pr-4 md:pr-6 mr-1 md:mr-2">
-              <div className="text-right">
+              <div className="text-right min-w-0">
                 <p className="text-[8px] md:text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Cash Balance</p>
-                <p className="text-xs md:text-sm font-mono text-yellow-400">${Number(account?.cashBalance ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+                <p
+                  className="text-xs md:text-sm font-mono text-yellow-400 whitespace-nowrap"
+                  title={`$${Number(account?.cashBalance ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                >
+                  {formatCashBalance(Number(account?.cashBalance ?? 0))}
+                </p>
               </div>
               <div className="text-right hidden lg:block">
                 <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Account Mode</p>
