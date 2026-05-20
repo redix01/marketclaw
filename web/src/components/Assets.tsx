@@ -4,7 +4,6 @@ import {
   ChevronRight,
   Minus,
   Bot,
-  MousePointerClick,
   ArrowUpRight,
   ArrowDownRight,
   AlertTriangle,
@@ -2585,8 +2584,8 @@ function ClosedTradesSection({ trades, summary, assetType }: { trades: ClosedTra
     <div className="p-6">
       <div className="flex items-center justify-between mb-5">
         <div>
-          <h3 className="text-lg font-bold text-white">Grid Orders</h3>
-          <p className="text-xs text-zinc-500">All auto-closed and manually exited positions.</p>
+          <h3 className="text-lg font-bold text-white">History</h3>
+          <p className="text-xs text-zinc-500">Closed positions — newest first.</p>
         </div>
         <div className="flex items-center gap-2">
           <div className="flex gap-1">
@@ -2658,15 +2657,10 @@ function ClosedTradesSection({ trades, summary, assetType }: { trades: ClosedTra
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-bold text-white">{trade.symbol}</span>
                     <span className="text-[9px] uppercase tracking-wider text-zinc-500 font-bold">{trade.assetType}</span>
-                    {trade.autoClosed ? (
+                    {trade.autoClosed && (
                       <span className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-300 font-bold">
                         <Bot size={9} />
                         Auto
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 border border-blue-500/20 text-blue-300 font-bold">
-                        <MousePointerClick size={9} />
-                        Manual
                       </span>
                     )}
                   </div>
