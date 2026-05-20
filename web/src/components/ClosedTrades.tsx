@@ -64,6 +64,7 @@ export default function ClosedTrades({ trades, summary }: ClosedTradesProps) {
     totalRealizedPnl: 0,
     avgPnlPercent: 0,
     autoClosedCount: 0,
+    botClosedCount: 0,
     manualClosedCount: 0,
   };
 

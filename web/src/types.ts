@@ -174,6 +174,8 @@ export interface ClosedTrade {
   realizedPnl: number;
   pnlPercent: number;
   autoClosed: boolean;
+  closedByBot?: boolean;
+  closeReason?: string;
   source: OrderSource;
   filledAt: string;
 }
@@ -183,6 +185,7 @@ export interface ClosedTradesSummary {
   totalRealizedPnl: number;
   avgPnlPercent: number;
   autoClosedCount: number;
+  botClosedCount: number;
   manualClosedCount: number;
 }
 

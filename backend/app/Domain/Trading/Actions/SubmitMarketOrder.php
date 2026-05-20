@@ -20,6 +20,7 @@ class SubmitMarketOrder
         string $source = 'manual',
         ?int $agentId = null,
         bool $forceSubmittedPrice = false,
+        array $tradeMeta = [],
     ): Order {
         if (! $symbol->is_active || ! $symbol->tradeable) {
             throw ValidationException::withMessages([
@@ -30,7 +31,7 @@ class SubmitMarketOrder
         $price = $this->resolveExecutionPrice($symbol, $submittedPrice, $forceSubmittedPrice);
         $totalValue = round($price * $quantity, 8);
 
-        return DB::transaction(function () use ($account, $symbol, $side, $quantity, $submittedPrice, $source, $agentId, $price, $totalValue): Order {
+        return DB::transaction(function () use ($account, $symbol, $side, $quantity, $submittedPrice, $source, $agentId, $price, $totalValue, $tradeMeta): Order {
             $account->refresh();
 
             if ($side === 'buy' && (float) $account->cash_balance < $totalValue) {
@@ -108,6 +109,12 @@ class SubmitMarketOrder
                 $meta['realized_pnl'] = round($realizedPnl, 2);
                 $meta['pnl_percent'] = round($pnlPercent, 2);
                 $meta['auto_closed'] = false;
+                $meta['closed_by_bot'] = $source === 'bot';
+                $meta['close_reason'] = $source === 'bot' ? 'session_reset' : 'manual';
+            }
+
+            if ($tradeMeta !== []) {
+                $meta = array_merge($meta, $tradeMeta);
             }
 
             $account->ledgerEntries()->create([

@@ -1150,6 +1150,7 @@ function SetupForm({
     totalRealizedPnl: 0,
     avgPnlPercent: 0,
     autoClosedCount: 0,
+    botClosedCount: 0,
     manualClosedCount: 0,
   };
 
@@ -1539,50 +1540,17 @@ function RunningTrader({
     );
   }, [serverTrades, botStartedAt]);
 
-  // Restrict the symbol pool to the trader's asset class so a Stock agent
-  // never opens crypto grids and vice versa. Fall back to all symbols only
-  // if the filter would empty the pool entirely.
+  const assetPositions = useMemo(
+    () => positions.filter((position) => position.assetType === assetType),
+    [positions, assetType],
+  );
   const filteredSymbols = useMemo(
     () => liveSymbols.filter((s) => s.type === assetType),
     [liveSymbols, assetType]
   );
-  const liveSymbolsRef = useRef(filteredSymbols.length > 0 ? filteredSymbols : liveSymbols);
-  liveSymbolsRef.current = filteredSymbols.length > 0 ? filteredSymbols : liveSymbols;
-  const configRef = useRef(config);
-  configRef.current = config;
-
-  const baseWallet = account?.cashBalance ?? 192.23;
-  const baseWalletRef = useRef(baseWallet);
-  baseWalletRef.current = baseWallet;
-
-  const persistedRef = useRef<PersistedSession | null>(loadPersisted());
-
-  const sessionStartRef = useRef<number>(persistedRef.current?.sessionStart ?? Date.now());
-
-  const [grids, setGrids] = useState<GridConfig[]>(() => {
-    const persisted = persistedRef.current;
-    // Only reuse the persisted grid session if it actually matches the
-    // currently selected asset class — otherwise the user could land on a
-    // Crypto trader showing yesterday's stock grids.
-    const persistedMatchesType = persisted?.grids?.length
-      && persisted.grids.every((g) => g.type === assetType);
-    if (persistedMatchesType) {
-      const maxId = persisted!.gridIdCounter ?? 0;
-      gridIdCounter = Math.max(gridIdCounter, maxId);
-      return persisted!.grids;
-    }
-    const pool = filteredSymbols.length > 0 ? filteredSymbols : liveSymbols;
-    const slots = Math.min(config.maxOpenPositions, pool.length);
-    return pool.slice(0, slots).map((symbol, index) => buildGrid(symbol, index, Date.now(), config, baseWallet));
-  });
-  const [closedTrades, setClosedTrades] = useState<LocalClosedTrade[]>(
-    () => persistedRef.current?.closedTrades ?? []
-  );
-  const [sessionRealized, setSessionRealized] = useState(
-    () => persistedRef.current?.sessionRealized ?? 0
-  );
+  const displayedSymbols = filteredSymbols.length > 0 ? filteredSymbols : liveSymbols;
+  const sessionStartRef = useRef<number>(botStartedAt ? new Date(botStartedAt).getTime() : Date.now());
   const [now, setNow] = useState(Date.now());
-  const [emergencyHalted, setEmergencyHalted] = useState(false);
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 1000);
@@ -1678,12 +1646,6 @@ function RunningTrader({
   const [liveMarketPrices, setLiveMarketPrices] = useState<Record<string, number>>({});
   const ticksRef = useRef<Record<string, GridTick>>({});
   ticksRef.current = ticks;
-  const gridsRef = useRef(grids);
-  gridsRef.current = grids;
-  const sessionRealizedRef = useRef(sessionRealized);
-  sessionRealizedRef.current = sessionRealized;
-  const haltedRef = useRef(emergencyHalted);
-  haltedRef.current = emergencyHalted;
   const liveMarketPricesRef = useRef<Record<string, number>>({});
   liveMarketPricesRef.current = liveMarketPrices;
 
@@ -1734,17 +1696,9 @@ function RunningTrader({
     const loop = (nowMs: number) => {
       if (nowMs - last >= 750) {
         last = nowMs;
-        const currentGrids = gridsRef.current;
-        const cfg = configRef.current;
-        const halted = haltedRef.current;
         const nextTicks: Record<string, GridTick> = {};
-        const closedThisRound: LocalClosedTrade[] = [];
-        let realizedDelta = 0;
 
-        const replacements: { index: number; grid: GridConfig }[] = [];
-
-        for (let i = 0; i < currentGrids.length; i += 1) {
-          const grid = currentGrids[i];
+        for (const grid of grids) {
           const tick = tickGrid(
             grid,
             ticksRef.current[grid.id],
@@ -1805,54 +1759,13 @@ function RunningTrader({
         }
 
         setTicks(nextTicks);
-
-        if (closedThisRound.length > 0) {
-          setClosedTrades((prev) => [...closedThisRound, ...prev].slice(0, 200));
-          setSessionRealized((prev) => {
-            const next = prev + realizedDelta;
-            // Emergency stop: halt trading once total session loss
-            // exceeds the user-configured loss threshold of base wallet.
-            const lossPct = baseWalletRef.current > 0 ? (next / baseWalletRef.current) * 100 : 0;
-            if (lossPct <= -cfg.emergencyStopPercent && !haltedRef.current) {
-              haltedRef.current = true;
-              setEmergencyHalted(true);
-            }
-            return next;
-          });
-        }
       }
       frame = window.requestAnimationFrame(loop);
     };
 
     frame = window.requestAnimationFrame(loop);
     return () => window.cancelAnimationFrame(frame);
-  }, []);
-
-  useEffect(() => {
-    savePersisted({
-      sessionStart: sessionStartRef.current,
-      grids,
-      closedTrades,
-      sessionRealized,
-      selectedSymbol,
-      gridIdCounter,
-    });
-  }, [grids, closedTrades, sessionRealized, selectedSymbol]);
-
-  useEffect(() => {
-    const handleUnload = () => {
-      savePersisted({
-        sessionStart: sessionStartRef.current,
-        grids: gridsRef.current,
-        closedTrades,
-        sessionRealized,
-        selectedSymbol,
-        gridIdCounter,
-      });
-    };
-    window.addEventListener('beforeunload', handleUnload);
-    return () => window.removeEventListener('beforeunload', handleUnload);
-  }, [closedTrades, sessionRealized, selectedSymbol]);
+  }, [assetType, grids]);
 
   const enriched = useMemo(
     () =>
@@ -1872,11 +1785,8 @@ function RunningTrader({
 
   const selected = enriched.find((entry) => entry.grid.symbol === selectedSymbol) ?? enriched[0];
 
-  // Wallet displayed here is the *server-canonical* cashBalance — same value
-  // the Layout top-bar and Dashboard render. The local sessionRealized state
-  // exists only to drive the simulated grid animations and must not bleed
-  // into a balance display, otherwise the AI Trader would say $13,235 while
-  // the rest of the app correctly says $13,000.
+  // Wallet displayed here is the server-canonical cash balance so the AI
+  // trader page matches the rest of the app after a real backend close.
   const wallet = account?.cashBalance ?? 0;
 
   const totalMargin = enriched.reduce((sum, entry) => sum + entry.grid.margin, 0);
@@ -1901,12 +1811,13 @@ function RunningTrader({
     () => realClosed.reduce((sum, t) => sum + t.realizedPnl, 0),
     [realClosed]
   );
-  const realizedPercent = baseWallet > 0 ? (realRealizedPnl / baseWallet) * 100 : 0;
+  const realizedPercent = wallet > 0 ? (realRealizedPnl / wallet) * 100 : 0;
 
   const wins = realClosed.filter((trade) => trade.realizedPnl > 0).length;
   const losses = realClosed.length - wins;
   const closedCount = realClosed.length;
   const winRate = closedCount > 0 ? Math.round((wins / closedCount) * 100) : 0;
+  const emergencyHalted = realClosed.some((trade) => trade.closeReason === 'stop_loss') && assetPositions.length === 0;
 
   const sessionDuration = useMemo(() => {
     const elapsedSec = Math.max(0, Math.floor((now - sessionStartRef.current) / 1000));
@@ -1927,23 +1838,19 @@ function RunningTrader({
 
   const historyRows = useMemo(() => {
     if (!selected) return [] as { id: string; time: string; side: 'Buy' | 'Sell'; price: number; size: number; pnl: number }[];
-    const seed = symbolSeed(selected.grid.symbol);
-    const nowMs = Date.now();
-    const rangeStep = (selected.grid.basePrice * selected.grid.rangePercent) / 100 / Math.max(selected.grid.totalLevels, 1);
 
-    return Array.from({ length: 8 }, (_, index) => {
-      const buy = (seed + index) % 2 === 0;
-      const offset = (index - 3) * rangeStep;
-      return {
-        id: `${selected.grid.symbol}-${index}`,
-        time: new Date(nowMs - (index * 6 + (seed % 7)) * 60_000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        side: (buy ? 'Buy' : 'Sell') as 'Buy' | 'Sell',
-        price: selected.grid.basePrice + offset,
-        size: clamp(0.4 + ((seed + index) % 6) * 0.18, 0.4, 1.6),
-        pnl: ((seed + index * 3) % 9 - 3) * 0.018,
-      };
-    });
-  }, [selected]);
+    return realClosed
+      .filter((trade) => trade.symbol === selected.grid.symbol)
+      .slice(0, 8)
+      .map((trade) => ({
+        id: trade.id,
+        time: new Date(trade.filledAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        side: 'Sell' as const,
+        price: trade.exitPrice,
+        size: trade.quantity,
+        pnl: trade.realizedPnl,
+      }));
+  }, [realClosed, selected]);
 
   return (
     <div className="space-y-4">
@@ -2085,7 +1992,7 @@ function RunningTrader({
           <AlertTriangle size={18} className="text-rose-400 flex-shrink-0 mt-0.5" />
           <div className="text-xs text-rose-200 leading-relaxed">
             <span className="font-bold">Stop loss triggered.</span> Session loss exceeded {config.emergencyStopPercent}% of wallet —
-            new fills paused. Open positions will not auto-rotate until you reconfigure.
+            the trader flattened its open positions. Restart after reconfiguring if you want a new session.
           </div>
         </div>
       )}
@@ -2480,6 +2387,11 @@ function HistoryPane({
           <span className="text-right">P/L</span>
         </div>
         <div className="divide-y divide-zinc-800/60">
+          {rows.length === 0 && (
+            <div className="px-4 py-6 text-sm text-zinc-500 text-center">
+              No completed trades for {symbol} in this session yet.
+            </div>
+          )}
           {rows.map((row) => (
             <div key={row.id} className="grid grid-cols-[80px_60px_1fr_1fr_1fr] px-4 py-3 text-xs font-mono items-center">
               <span className="text-zinc-500">{row.time}</span>
@@ -2521,7 +2433,7 @@ function formatTime(timestamp: string) {
 }
 
 function ClosedTradesSection({ trades, summary, assetType }: { trades: ClosedTrade[]; summary: ClosedTradesSummary | null; assetType?: AssetClass }) {
-  const [filterType, setFilterType] = useState<'all' | 'auto' | 'manual'>('all');
+  const [filterType, setFilterType] = useState<'all' | 'auto' | 'bot' | 'manual'>('all');
   const [sortBy, setSortBy] = useState<'date' | 'pnl' | 'pnl_percent'>('date');
   const [showAll, setShowAll] = useState(false);
 
@@ -2540,6 +2452,7 @@ function ClosedTradesSection({ trades, summary, assetType }: { trades: ClosedTra
         totalRealizedPnl: 0,
         avgPnlPercent: 0,
         autoClosedCount: 0,
+        botClosedCount: 0,
         manualClosedCount: 0,
       };
     }
@@ -2549,12 +2462,15 @@ function ClosedTradesSection({ trades, summary, assetType }: { trades: ClosedTra
       ? scopedTrades.reduce((sum, t) => sum + t.pnlPercent, 0) / total
       : 0;
     const auto = scopedTrades.filter((t) => t.autoClosed).length;
+    const bot = scopedTrades.filter((t) => t.closedByBot && !t.autoClosed).length;
+    const manual = scopedTrades.filter((t) => !t.closedByBot).length;
     return {
       totalTrades: total,
       totalRealizedPnl: Number(realized.toFixed(2)),
       avgPnlPercent: Number(avgPnlPct.toFixed(2)),
       autoClosedCount: auto,
-      manualClosedCount: total - auto,
+      botClosedCount: bot,
+      manualClosedCount: manual,
     };
   }, [assetType, scopedTrades, summary]);
 
@@ -2563,8 +2479,10 @@ function ClosedTradesSection({ trades, summary, assetType }: { trades: ClosedTra
 
     if (filterType === 'auto') {
       result = result.filter((t) => t.autoClosed);
+    } else if (filterType === 'bot') {
+      result = result.filter((t) => t.closedByBot && !t.autoClosed);
     } else if (filterType === 'manual') {
-      result = result.filter((t) => !t.autoClosed);
+      result = result.filter((t) => !t.closedByBot);
     }
 
     // Numeric tiebreak by id (parsed from the string) keeps the order
@@ -2597,7 +2515,7 @@ function ClosedTradesSection({ trades, summary, assetType }: { trades: ClosedTra
         </div>
         <div className="flex items-center gap-2">
           <div className="flex gap-1">
-            {(['all', 'auto', 'manual'] as const).map((option) => (
+            {(['all', 'auto', 'bot', 'manual'] as const).map((option) => (
               <button
                 key={option}
                 onClick={() => setFilterType(option)}
@@ -2607,7 +2525,7 @@ function ClosedTradesSection({ trades, summary, assetType }: { trades: ClosedTra
                     : 'border-zinc-800 text-zinc-500 hover:border-zinc-700'
                 }`}
               >
-                {option === 'all' ? 'All' : option === 'auto' ? 'Auto' : 'Manual'}
+                {option === 'all' ? 'All' : option === 'auto' ? 'TP-SL' : option === 'bot' ? 'Reset' : 'Manual'}
               </button>
             ))}
           </div>
@@ -2641,8 +2559,8 @@ function ClosedTradesSection({ trades, summary, assetType }: { trades: ClosedTra
           </p>
         </div>
         <div className="rounded-xl border border-zinc-800/70 bg-zinc-900/30 px-3 py-2">
-          <p className="text-[9px] uppercase tracking-wider text-zinc-500 font-bold">Auto / Manual</p>
-          <p className="mt-1 text-lg font-mono font-bold text-white">{stats.autoClosedCount} / {stats.manualClosedCount}</p>
+          <p className="text-[9px] uppercase tracking-wider text-zinc-500 font-bold">TP-SL / Reset / Manual</p>
+          <p className="mt-1 text-lg font-mono font-bold text-white">{stats.autoClosedCount} / {stats.botClosedCount} / {stats.manualClosedCount}</p>
         </div>
       </div>
 
@@ -2668,7 +2586,12 @@ function ClosedTradesSection({ trades, summary, assetType }: { trades: ClosedTra
                     {trade.autoClosed && (
                       <span className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-300 font-bold">
                         <Bot size={9} />
-                        Auto
+                        {trade.closeReason === 'stop_loss' ? 'Stop' : 'TP'}
+                      </span>
+                    ) : trade.closedByBot ? (
+                      <span className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-zinc-300 font-bold">
+                        <Bot size={9} />
+                        Reset
                       </span>
                     )}
                   </div>

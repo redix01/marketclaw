@@ -42,6 +42,11 @@ class SeedBotPositions
                 'bot',
                 null,
                 true,
+                [
+                    'auto_closed' => false,
+                    'closed_by_bot' => true,
+                    'close_reason' => 'session_reset',
+                ],
             );
             $closed += 1;
         }

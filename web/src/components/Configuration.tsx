@@ -32,6 +32,7 @@ export default function Configuration({ account, closedTradesSummary }: Configur
     totalRealizedPnl: 0,
     avgPnlPercent: 0,
     autoClosedCount: 0,
+    botClosedCount: 0,
     manualClosedCount: 0,
   };
 

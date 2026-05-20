@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Domain\Accounts\Actions\EnsurePaperAccount;
+use App\Domain\Trading\Actions\AutoCloseProfitablePositions;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
@@ -13,8 +14,31 @@ class ClosedTradesController extends Controller
     public function index(
         User $user,
         EnsurePaperAccount $ensurePaperAccount,
+        AutoCloseProfitablePositions $autoCloseProfitablePositions,
     ): JsonResponse {
         $account = $ensurePaperAccount->handle($user);
+        $autoCloseProfitablePositions->handle($account);
+        $account->refresh();
+        $driver = DB::connection()->getDriverName();
+
+        $entryPriceExpr = $driver === 'sqlite'
+            ? "json_extract(ledger_entries.meta, '$.entry_price')"
+            : "ledger_entries.meta->>'entry_price'";
+        $realizedPnlExpr = $driver === 'sqlite'
+            ? "CAST(COALESCE(json_extract(ledger_entries.meta, '$.realized_pnl'), '0') AS REAL)"
+            : "COALESCE(ledger_entries.meta->>'realized_pnl', '0')::numeric";
+        $pnlPercentExpr = $driver === 'sqlite'
+            ? "CAST(COALESCE(json_extract(ledger_entries.meta, '$.pnl_percent'), '0') AS REAL)"
+            : "COALESCE(ledger_entries.meta->>'pnl_percent', '0')::numeric";
+        $autoClosedExpr = $driver === 'sqlite'
+            ? "CASE WHEN COALESCE(json_extract(ledger_entries.meta, '$.auto_closed'), 0) IN (1, '1', 'true') THEN 1 ELSE 0 END"
+            : "COALESCE(ledger_entries.meta->>'auto_closed', 'false')::boolean";
+        $closedByBotExpr = $driver === 'sqlite'
+            ? "CASE WHEN COALESCE(json_extract(ledger_entries.meta, '$.closed_by_bot'), CASE WHEN orders.source = 'bot' THEN 1 ELSE 0 END) IN (1, '1', 'true') THEN 1 ELSE 0 END"
+            : "COALESCE(ledger_entries.meta->>'closed_by_bot', CASE WHEN orders.source = 'bot' THEN 'true' ELSE 'false' END)::boolean";
+        $closeReasonExpr = $driver === 'sqlite'
+            ? "COALESCE(json_extract(ledger_entries.meta, '$.close_reason'), CASE WHEN orders.source = 'bot' THEN 'session_reset' ELSE 'manual' END)"
+            : "COALESCE(ledger_entries.meta->>'close_reason', CASE WHEN orders.source = 'bot' THEN 'session_reset' ELSE 'manual' END)";
 
         $closedTrades = DB::table('orders')
             ->join('symbols', 'orders.symbol_id', '=', 'symbols.id')
@@ -34,10 +58,12 @@ class ClosedTradesController extends Controller
                 'orders.submitted_at',
                 'orders.filled_at',
                 'orders.source',
-                DB::raw("COALESCE(ledger_entries.meta->>'entry_price', NULL) as entry_price_meta"),
-                DB::raw("COALESCE(ledger_entries.meta->>'realized_pnl', '0')::numeric as realized_pnl"),
-                DB::raw("COALESCE(ledger_entries.meta->>'pnl_percent', '0')::numeric as pnl_percent"),
-                DB::raw("COALESCE(ledger_entries.meta->>'auto_closed', 'false')::boolean as auto_closed")
+                DB::raw("{$entryPriceExpr} as entry_price_meta"),
+                DB::raw("{$realizedPnlExpr} as realized_pnl"),
+                DB::raw("{$pnlPercentExpr} as pnl_percent"),
+                DB::raw("{$autoClosedExpr} as auto_closed"),
+                DB::raw("{$closedByBotExpr} as closed_by_bot"),
+                DB::raw("{$closeReasonExpr} as close_reason")
             )
             // Stable newest-first ordering. filled_at DESC alone is not
             // enough because the trader:tick cron can fire dozens of
@@ -52,6 +78,7 @@ class ClosedTradesController extends Controller
                 $trade->realized_pnl = (float) $trade->realized_pnl;
                 $trade->pnl_percent = (float) $trade->pnl_percent;
                 $trade->auto_closed = filter_var($trade->auto_closed, FILTER_VALIDATE_BOOLEAN);
+                $trade->closed_by_bot = filter_var($trade->closed_by_bot, FILTER_VALIDATE_BOOLEAN);
 
                 // Prefer the entry price recorded in meta — the older fallback
                 // back-computed it from pnl_percent which collapses to exit
@@ -73,7 +100,8 @@ class ClosedTradesController extends Controller
                 ? round($closedTrades->avg('pnl_percent'), 2)
                 : 0,
             'auto_closed_count' => $closedTrades->where('auto_closed', true)->count(),
-            'manual_closed_count' => $closedTrades->where('auto_closed', false)->count(),
+            'bot_closed_count' => $closedTrades->where('closed_by_bot', true)->where('auto_closed', false)->count(),
+            'manual_closed_count' => $closedTrades->where('closed_by_bot', false)->count(),
         ];
 
         return response()->json([

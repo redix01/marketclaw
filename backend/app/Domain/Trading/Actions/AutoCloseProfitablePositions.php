@@ -45,25 +45,50 @@ class AutoCloseProfitablePositions
             .' commission='.$commissionPercent.'%');
 
         foreach ($positions as $position) {
-            $currentPrice = $position->resolvedCurrentPrice();
-            if ($currentPrice <= 0) {
-                continue;
-            }
-            $entryPrice = (float) $position->average_entry_price;
+            $result = DB::transaction(function () use (
+                $account,
+                $position,
+                $autoCloseEnabled,
+                $takeProfitPercent,
+                $emergencyStopPercent,
+                $commissionPercent
+            ): ?string {
+                $lockedPosition = Position::query()
+                    ->with(['symbol.latestQuote'])
+                    ->whereKey($position->id)
+                    ->lockForUpdate()
+                    ->first();
 
-            if ($entryPrice <= 0) {
-                continue;
-            }
+                if (! $lockedPosition) {
+                    return null;
+                }
 
-            $pnlPercent = (($currentPrice - $entryPrice) / $entryPrice) * 100;
+                $currentPrice = $lockedPosition->resolvedCurrentPrice();
+                if ($currentPrice <= 0) {
+                    return null;
+                }
 
-            $hitTakeProfit = $autoCloseEnabled && $pnlPercent >= $takeProfitPercent;
-            $hitStopLoss = $pnlPercent <= -$emergencyStopPercent;
+                $entryPrice = (float) $lockedPosition->average_entry_price;
+                if ($entryPrice <= 0) {
+                    return null;
+                }
 
-            if ($hitTakeProfit || $hitStopLoss) {
+                $pnlPercent = (($currentPrice - $entryPrice) / $entryPrice) * 100;
+                $hitTakeProfit = $autoCloseEnabled && $pnlPercent >= $takeProfitPercent;
+                $hitStopLoss = $pnlPercent <= -$emergencyStopPercent;
+
+                if (! $hitTakeProfit && ! $hitStopLoss) {
+                    return null;
+                }
+
                 $reason = $hitTakeProfit ? 'take_profit' : 'stop_loss';
-                $this->closePosition($account, $position, $currentPrice, $pnlPercent, $reason, $commissionPercent);
-                $closed[] = $position->symbol->ticker.':'.$reason;
+                $this->closePosition($account->fresh(), $lockedPosition, $currentPrice, $pnlPercent, $reason, $commissionPercent);
+
+                return $lockedPosition->symbol->ticker.':'.$reason;
+            }, 3);
+
+            if ($result) {
+                $closed[] = $result;
             }
         }
 
@@ -82,76 +107,75 @@ class AutoCloseProfitablePositions
         string $reason,
         float $commissionPercent,
     ): void {
-        DB::transaction(function () use ($account, $position, $currentPrice, $pnlPercent, $reason, $commissionPercent): void {
-            $quantity = (float) $position->quantity;
-            $totalValue = $quantity * $currentPrice;
-            $entryPrice = (float) $position->average_entry_price;
-            $realizedPnl = $totalValue - ($quantity * $entryPrice);
+        $quantity = (float) $position->quantity;
+        $totalValue = $quantity * $currentPrice;
+        $entryPrice = (float) $position->average_entry_price;
+        $realizedPnl = $totalValue - ($quantity * $entryPrice);
 
-            // Commission only bites profits — losers don't get charged.
-            $commission = $realizedPnl > 0
-                ? round($realizedPnl * ($commissionPercent / 100), 2)
-                : 0.0;
-            $netProceeds = $totalValue - $commission;
-            $netRealized = $realizedPnl - $commission;
+        // Commission only bites profits — losers don't get charged.
+        $commission = $realizedPnl > 0
+            ? round($realizedPnl * ($commissionPercent / 100), 2)
+            : 0.0;
+        $netProceeds = $totalValue - $commission;
+        $netRealized = $realizedPnl - $commission;
 
-            $order = $account->orders()->create([
-                'user_id' => $account->user_id,
-                'symbol_id' => $position->symbol_id,
-                'agent_id' => null,
+        $order = $account->orders()->create([
+            'user_id' => $account->user_id,
+            'symbol_id' => $position->symbol_id,
+            'agent_id' => null,
+            'side' => 'sell',
+            'order_type' => 'market',
+            'quantity' => $quantity,
+            'submitted_price' => $currentPrice,
+            'fill_price' => $currentPrice,
+            'status' => 'filled',
+            'source' => 'bot',
+            'submitted_at' => now(),
+            'filled_at' => now(),
+        ]);
+
+        // Net proceeds (sale value − commission) credited to the wallet so
+        // the realized P&L compounds. Loss exits return the full sale.
+        $account->update([
+            'cash_balance' => $account->cash_balance + $netProceeds,
+        ]);
+
+        $position->delete();
+
+        $account->ledgerEntries()->create([
+            'user_id' => $account->user_id,
+            'type' => 'trade_sell',
+            'amount' => $netProceeds,
+            'description' => sprintf(
+                'Auto-closed (%s) %s %s @ %s (%.2f%%, %s$%s realized%s)',
+                $reason,
+                $quantity,
+                $position->symbol->ticker,
+                $currentPrice,
+                $pnlPercent,
+                $netRealized >= 0 ? '+' : '-',
+                number_format(abs($netRealized), 2),
+                $commission > 0 ? sprintf(', −$%s commission', number_format($commission, 2)) : ''
+            ),
+            'reference_type' => Order::class,
+            'reference_id' => $order->id,
+            'meta' => [
+                'symbol' => $position->symbol->ticker,
                 'side' => 'sell',
-                'order_type' => 'market',
                 'quantity' => $quantity,
-                'submitted_price' => $currentPrice,
-                'fill_price' => $currentPrice,
-                'status' => 'filled',
+                'price' => $currentPrice,
+                'entry_price' => round($entryPrice, 6),
+                'exit_price' => round($currentPrice, 6),
                 'source' => 'bot',
-                'submitted_at' => now(),
-                'filled_at' => now(),
-            ]);
-
-            // Net proceeds (sale value − commission) credited to the wallet so
-            // the realized P&L compounds. Loss exits return the full sale.
-            $account->update([
-                'cash_balance' => $account->cash_balance + $netProceeds,
-            ]);
-
-            $position->delete();
-
-            $account->ledgerEntries()->create([
-                'user_id' => $account->user_id,
-                'type' => 'trade_sell',
-                'amount' => $netProceeds,
-                'description' => sprintf(
-                    'Auto-closed (%s) %s %s @ %s (%.2f%%, %s$%s realized%s)',
-                    $reason,
-                    $quantity,
-                    $position->symbol->ticker,
-                    $currentPrice,
-                    $pnlPercent,
-                    $netRealized >= 0 ? '+' : '-',
-                    number_format(abs($netRealized), 2),
-                    $commission > 0 ? sprintf(', −$%s commission', number_format($commission, 2)) : ''
-                ),
-                'reference_type' => Order::class,
-                'reference_id' => $order->id,
-                'meta' => [
-                    'symbol' => $position->symbol->ticker,
-                    'side' => 'sell',
-                    'quantity' => $quantity,
-                    'price' => $currentPrice,
-                    'entry_price' => round($entryPrice, 6),
-                    'exit_price' => round($currentPrice, 6),
-                    'source' => 'bot',
-                    'realized_pnl' => round($netRealized, 2),
-                    'gross_realized_pnl' => round($realizedPnl, 2),
-                    'commission' => $commission,
-                    'commission_percent' => $commissionPercent,
-                    'pnl_percent' => round($pnlPercent, 2),
-                    'auto_closed' => true,
-                    'reason' => $reason,
-                ],
-            ]);
-        });
+                'realized_pnl' => round($netRealized, 2),
+                'gross_realized_pnl' => round($realizedPnl, 2),
+                'commission' => $commission,
+                'commission_percent' => $commissionPercent,
+                'pnl_percent' => round($pnlPercent, 2),
+                'auto_closed' => true,
+                'closed_by_bot' => true,
+                'close_reason' => $reason,
+            ],
+        ]);
     }
 }

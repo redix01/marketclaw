@@ -179,8 +179,9 @@ export function useTradingData(user: any) {
       setLoading(true);
 
       try {
-        const [dashboardResponse, accountResponse, positionsResponse, ordersResponse, ledgerResponse, symbolsResponse, closedTradesResponse, preferencesResponse] = await Promise.all([
-          apiFetch<{ data: any }>(`/users/${uid}/dashboard`),
+        const dashboardResponse = await apiFetch<{ data: any }>(`/users/${uid}/dashboard`);
+
+        const [accountResponse, positionsResponse, ordersResponse, ledgerResponse, symbolsResponse, closedTradesResponse, preferencesResponse] = await Promise.all([
           apiFetch<{ data: any }>(`/users/${uid}/account`),
           apiFetch<{ data: any[] }>(`/users/${uid}/positions`),
           apiFetch<{ data: any[] }>(`/users/${uid}/orders`),
@@ -224,6 +225,8 @@ export function useTradingData(user: any) {
           realizedPnl: parseFloat(trade.realized_pnl),
           pnlPercent: parseFloat(trade.pnl_percent),
           autoClosed: trade.auto_closed === true || trade.auto_closed === 'true' || trade.auto_closed === 1,
+          closedByBot: trade.closed_by_bot === true || trade.closed_by_bot === 'true' || trade.closed_by_bot === 1,
+          closeReason: trade.close_reason ?? undefined,
           source: trade.source,
           filledAt: trade.filled_at,
         })));
@@ -232,6 +235,7 @@ export function useTradingData(user: any) {
           totalRealizedPnl: Number(closedTradesResponse.summary.total_realized_pnl ?? 0),
           avgPnlPercent: Number(closedTradesResponse.summary.avg_pnl_percent ?? 0),
           autoClosedCount: Number(closedTradesResponse.summary.auto_closed_count ?? 0),
+          botClosedCount: Number(closedTradesResponse.summary.bot_closed_count ?? 0),
           manualClosedCount: Number(closedTradesResponse.summary.manual_closed_count ?? 0),
         } : null);
       } finally {

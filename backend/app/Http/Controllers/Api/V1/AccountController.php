@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Domain\Accounts\Actions\EnsurePaperAccount;
 use App\Domain\Accounts\Actions\WithdrawFunds;
+use App\Domain\Trading\Actions\AutoCloseProfitablePositions;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\DepositRequestStoreRequest;
 use App\Http\Requests\Api\V1\WithdrawFundsRequest;
@@ -18,9 +19,15 @@ use Illuminate\Support\Facades\Storage;
 
 class AccountController extends Controller
 {
-    public function show(User $user, EnsurePaperAccount $ensurePaperAccount): JsonResponse
+    public function show(
+        User $user,
+        EnsurePaperAccount $ensurePaperAccount,
+        AutoCloseProfitablePositions $autoCloseProfitablePositions,
+    ): JsonResponse
     {
         $account = $ensurePaperAccount->handle($user)->load('user');
+        $autoCloseProfitablePositions->handle($account);
+        $account->refresh()->load('user');
 
         return response()->json([
             'data' => FrontendPayload::account($account),

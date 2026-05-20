@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Domain\Accounts\Actions\EnsurePaperAccount;
+use App\Domain\Trading\Actions\AutoCloseProfitablePositions;
 use App\Domain\Trading\Actions\SubmitMarketOrder;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\SubmitOrderRequest;
@@ -13,9 +14,15 @@ use Illuminate\Http\JsonResponse;
 
 class OrderController extends Controller
 {
-    public function index(User $user, EnsurePaperAccount $ensurePaperAccount): JsonResponse
+    public function index(
+        User $user,
+        EnsurePaperAccount $ensurePaperAccount,
+        AutoCloseProfitablePositions $autoCloseProfitablePositions,
+    ): JsonResponse
     {
         $account = $ensurePaperAccount->handle($user);
+        $autoCloseProfitablePositions->handle($account);
+        $account->refresh();
         $orders = $account->orders()
             ->with('symbol')
             ->latest()
