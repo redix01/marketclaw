@@ -2215,17 +2215,20 @@ function RunningTrader({
           <main className="flex flex-col">
             <div className="border-b border-zinc-800/60 px-6 pt-5">
               <div className="flex items-center gap-6">
-                {(['detail', 'history'] as const).map((value) => (
+                {([
+                  { value: 'detail', label: 'Detail' },
+                  { value: 'history', label: 'Order History' },
+                ] as const).map(({ value, label }) => (
                   <button
                     key={value}
                     onClick={() => setTab(value)}
-                    className={`pb-3 text-[11px] uppercase tracking-[0.22em] font-bold border-b-2 transition-colors ${
+                    className={`pb-3 text-[11px] uppercase tracking-[0.22em] font-bold border-b-2 transition-colors whitespace-nowrap ${
                       tab === value
                         ? 'text-white border-yellow-400'
                         : 'text-zinc-500 border-transparent hover:text-zinc-300'
                     }`}
                   >
-                    {value}
+                    {label}
                   </button>
                 ))}
               </div>
@@ -2296,19 +2299,33 @@ function DetailPane({
         </div>
       </div>
 
-      <div className="rounded-2xl bg-zinc-900/40 border border-zinc-800/60 px-6 py-5">
+      <div className="rounded-2xl bg-zinc-900/40 border border-zinc-800/60 px-4 sm:px-6 py-5">
         <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500 font-bold mb-2">Unrealized PNL</p>
-        <div className="flex items-baseline gap-3">
-          <p className={`text-5xl font-mono ${positive ? 'text-yellow-400' : 'text-rose-400'}`}>
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <p
+            className={`font-mono leading-tight whitespace-nowrap truncate max-w-full ${positive ? 'text-yellow-400' : 'text-rose-400'}`}
+            style={{ fontSize: 'clamp(1.875rem, 9vw, 3rem)' }}
+            title={formatSignedMoney(totalPnL, 4)}
+          >
             {formatSignedMoney(totalPnL, 4)}
           </p>
-          <p className={`text-sm font-bold ${positive ? 'text-yellow-400/80' : 'text-rose-400/80'}`}>
+          <p className={`text-xs sm:text-sm font-bold ${positive ? 'text-yellow-400/80' : 'text-rose-400/80'}`}>
             {pnlPercent >= 0 ? '+' : ''}{pnlPercent.toFixed(2)}%
           </p>
         </div>
-        <div className="mt-4 flex items-center gap-6 text-xs">
-          <span className="text-zinc-500">Realized: <span className={selected.realizedPnL >= 0 ? 'text-yellow-400' : 'text-rose-400'}>{formatSignedMoney(selected.realizedPnL, 4)}</span></span>
-          <span className="text-zinc-500">Unrealized: <span className={selected.unrealizedPnL >= 0 ? 'text-yellow-400' : 'text-rose-400'}>{formatSignedMoney(selected.unrealizedPnL, 4)}</span></span>
+        <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] sm:text-xs">
+          <span className="text-zinc-500">
+            Realized:{' '}
+            <span className={`font-mono ${selected.realizedPnL >= 0 ? 'text-yellow-400' : 'text-rose-400'}`}>
+              {formatSignedMoney(selected.realizedPnL, 4)}
+            </span>
+          </span>
+          <span className="text-zinc-500">
+            Unrealized:{' '}
+            <span className={`font-mono ${selected.unrealizedPnL >= 0 ? 'text-yellow-400' : 'text-rose-400'}`}>
+              {formatSignedMoney(selected.unrealizedPnL, 4)}
+            </span>
+          </span>
         </div>
       </div>
 
