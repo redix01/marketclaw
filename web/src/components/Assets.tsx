@@ -2246,7 +2246,12 @@ function RunningTrader({
           </main>
 
           <div className="border-t border-zinc-800/60 col-span-1 lg:col-span-2">
-            <ClosedTradesSection trades={sessionServerTrades} summary={null} assetType={assetType} />
+            {/* Use the lifetime serverTrades feed so the list matches the
+                headline "Closed" count above it. Filtering by botStartedAt
+                meant a freshly resumed session showed "No closed trades yet"
+                even when the stat panel claimed 36 closed trades — auto-closes
+                from previous sessions were silently hidden. */}
+            <ClosedTradesSection trades={serverTrades} summary={serverTradesSummary} assetType={assetType} />
           </div>
         </div>
       </div>
