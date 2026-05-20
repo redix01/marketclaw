@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   ChevronRight,
   Minus,
@@ -1644,9 +1645,36 @@ function RunningTrader({
     account?.cashBalance,
   ]);
 
-  const [selectedSymbol, setSelectedSymbol] = useState<string>(
-    () => persistedRef.current?.selectedSymbol ?? grids[0]?.symbol ?? ''
+  // Selected grid is mirrored to the URL as ?symbol=PYPL so each grid has
+  // a deep-linkable address (the dashboard URL identifies which trade the
+  // user is looking at, can be bookmarked, shared, or refreshed without
+  // losing context). The URL is the source of truth on mount; once mounted
+  // we keep them in sync both ways.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlSymbol = searchParams.get('symbol') ?? '';
+  const [selectedSymbol, setSelectedSymbolState] = useState<string>(
+    () => urlSymbol || persistedRef.current?.selectedSymbol || grids[0]?.symbol || ''
   );
+  const setSelectedSymbol = (symbol: string) => {
+    setSelectedSymbolState(symbol);
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (symbol) next.set('symbol', symbol);
+        else next.delete('symbol');
+        return next;
+      },
+      { replace: true },
+    );
+  };
+  // Pick up URL changes initiated outside this component (back/forward
+  // navigation, paste-into-address-bar) as long as the symbol matches an
+  // active grid for this trader.
+  useEffect(() => {
+    if (urlSymbol && urlSymbol !== selectedSymbol && grids.some((g) => g.symbol === urlSymbol)) {
+      setSelectedSymbolState(urlSymbol);
+    }
+  }, [urlSymbol, grids, selectedSymbol]);
   const [ticks, setTicks] = useState<Record<string, GridTick>>({});
   const [liveMarketPrices, setLiveMarketPrices] = useState<Record<string, number>>({});
   const ticksRef = useRef<Record<string, GridTick>>({});
@@ -2281,24 +2309,49 @@ function DetailPane({
   const orderSize = grid.margin / Math.max(grid.totalLevels, 1);
   const totalPnL = selected.realizedPnL + selected.unrealizedPnL;
   const pnlPercent = grid.margin > 0 ? (totalPnL / grid.margin) * 100 : 0;
+  const realizedPercent = grid.margin > 0 ? (selected.realizedPnL / grid.margin) * 100 : 0;
+  const unrealizedPercent = grid.margin > 0 ? (selected.unrealizedPnL / grid.margin) * 100 : 0;
   const positive = totalPnL >= 0;
+  const priceChange = selected.price - grid.basePrice;
+  const priceChangePct = grid.basePrice > 0 ? (priceChange / grid.basePrice) * 100 : 0;
+  const priceUp = priceChange >= 0;
   const holding = positions.find((position) => position.symbol === grid.symbol);
 
   return (
     <div className="p-6 space-y-5 overflow-y-auto">
-      <div className="flex items-center gap-3">
-        <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center">
+      <div className="flex items-start gap-3 flex-wrap">
+        <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center shrink-0">
           <Minus className="text-zinc-500" size={18} />
         </div>
-        <div>
-          <h2 className="text-3xl font-bold text-white tracking-tight">{grid.symbol}</h2>
-          <div className="flex items-center gap-3 text-xs text-zinc-500 mt-0.5">
-            <span>{grid.symbol}/USDT</span>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-baseline gap-3 flex-wrap">
+            <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">{grid.symbol}</h2>
+            <span
+              className="text-base sm:text-lg font-mono text-zinc-300 whitespace-nowrap"
+              title={`Live market price: $${selected.price.toFixed(4)}`}
+            >
+              ${formatPrice(selected.price)}
+            </span>
+            <span className={`text-xs font-bold font-mono ${priceUp ? 'text-yellow-400' : 'text-rose-400'}`}>
+              {priceUp ? '+' : ''}{priceChangePct.toFixed(2)}%
+            </span>
+          </div>
+          <div className="flex items-center gap-2 sm:gap-3 text-xs text-zinc-500 mt-1.5 flex-wrap">
+            <span className="whitespace-nowrap">{grid.symbol}/USDT</span>
             <span className="inline-flex items-center gap-1.5">
               <span className={`w-1.5 h-1.5 rounded-full ${grid.active ? 'bg-yellow-400 animate-pulse' : 'bg-zinc-600'}`} />
               <span className={`text-[11px] uppercase tracking-wider font-bold ${grid.active ? 'text-yellow-400' : 'text-zinc-500'}`}>
                 {grid.active ? 'Active' : 'Paused'}
               </span>
+            </span>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-zinc-900 border border-zinc-800 text-[10px] uppercase tracking-wider font-bold text-zinc-300 whitespace-nowrap">
+              <Zap size={10} className="text-yellow-400" /> {grid.leverage}x
+            </span>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-zinc-900 border border-zinc-800 text-[10px] uppercase tracking-wider font-bold text-zinc-300 whitespace-nowrap">
+              Entry ${formatPrice(grid.basePrice)}
+            </span>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-zinc-900 border border-zinc-800 text-[10px] uppercase tracking-wider font-bold text-zinc-300 whitespace-nowrap">
+              Margin {formatMoney(grid.margin)}
             </span>
           </div>
         </div>
@@ -2324,11 +2377,17 @@ function DetailPane({
             <span className={`font-mono ${selected.realizedPnL >= 0 ? 'text-yellow-400' : 'text-rose-400'}`}>
               {formatSignedMoney(selected.realizedPnL, 4)}
             </span>
+            <span className={`ml-1 font-mono text-[10px] sm:text-[11px] ${selected.realizedPnL >= 0 ? 'text-yellow-400/70' : 'text-rose-400/70'}`}>
+              ({realizedPercent >= 0 ? '+' : ''}{realizedPercent.toFixed(2)}%)
+            </span>
           </span>
           <span className="text-zinc-500">
             Unrealized:{' '}
             <span className={`font-mono ${selected.unrealizedPnL >= 0 ? 'text-yellow-400' : 'text-rose-400'}`}>
               {formatSignedMoney(selected.unrealizedPnL, 4)}
+            </span>
+            <span className={`ml-1 font-mono text-[10px] sm:text-[11px] ${selected.unrealizedPnL >= 0 ? 'text-yellow-400/70' : 'text-rose-400/70'}`}>
+              ({unrealizedPercent >= 0 ? '+' : ''}{unrealizedPercent.toFixed(2)}%)
             </span>
           </span>
         </div>
