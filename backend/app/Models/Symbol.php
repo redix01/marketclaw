@@ -37,7 +37,14 @@ class Symbol extends Model
 
     public function latestQuote(): HasOne
     {
-        return $this->hasOne(MarketQuote::class)->latestOfMany('quoted_at');
+        // Order by insertion (`id`) rather than market `quoted_at`. The
+        // provider's `quoted_at` is the *trade* timestamp, which freezes at
+        // the last close while the market is shut — meaning a freshly-fetched
+        // after-hours quote could "lose" to a stale seeded row whose
+        // `quoted_at` was set to `now()`. Ordering by the auto-increment
+        // primary key guarantees the most recently *recorded* quote always
+        // wins, which is the semantic the dashboard and bot want.
+        return $this->hasOne(MarketQuote::class)->latestOfMany('id');
     }
 
     public function positions(): HasMany
