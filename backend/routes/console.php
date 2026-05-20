@@ -133,6 +133,93 @@ Schedule::command('trader:tick')
     ->withoutOverlapping()
     ->runInBackground();
 
+/**
+ * Pull a broader stock universe from Finnhub and upsert into our Symbol table.
+ *
+ * Finnhub `/stock/symbol?exchange=US` returns the full US listing. We filter
+ * to Common Stock, prefer well-known exchanges (NASDAQ, NYSE), drop ETFs /
+ * warrants / units, then take up to `--limit` tickers and upsert. Existing
+ * rows are preserved (we don't downgrade `is_active`/`tradeable`).
+ */
+Artisan::command('symbols:sync-stocks {--limit=100} {--exchange=US}', function (): int {
+    $apiKey = (string) config('services.finnhub.key');
+    if ($apiKey === '') {
+        $this->error('FINNHUB_API_KEY is not configured.');
+
+        return 1;
+    }
+
+    $limit = max(1, (int) $this->option('limit'));
+    $exchange = (string) $this->option('exchange') ?: 'US';
+
+    $response = \Illuminate\Support\Facades\Http::baseUrl((string) config('services.finnhub.base_url'))
+        ->acceptJson()
+        ->timeout(20)
+        ->retry(2, 500)
+        ->get('/stock/symbol', [
+            'exchange' => $exchange,
+            'token' => $apiKey,
+        ]);
+
+    if (! $response->successful()) {
+        $this->error('Finnhub /stock/symbol request failed: HTTP '.$response->status());
+
+        return 1;
+    }
+
+    $rows = collect($response->json() ?? []);
+
+    $filtered = $rows
+        ->filter(function (array $row): bool {
+            $type = strtolower((string) ($row['type'] ?? ''));
+            $ticker = (string) ($row['symbol'] ?? '');
+
+            // Keep only ordinary common shares — skip ETFs, warrants, units,
+            // and tickers with dots/dashes other than standard share-class
+            // markers (BRK.B, etc.).
+            if (! in_array($type, ['common stock', ''], true)) {
+                return false;
+            }
+            if ($ticker === '' || str_contains($ticker, '.WS') || str_contains($ticker, '-U')) {
+                return false;
+            }
+            // Restrict to NASDAQ / NYSE listings so we don't pull pink-sheet
+            // tickers the AI trader has no business touching.
+            $mic = strtoupper((string) ($row['mic'] ?? ''));
+            if ($mic !== '' && ! in_array($mic, ['XNAS', 'XNYS', 'ARCX', 'BATS'], true)) {
+                return false;
+            }
+
+            return true;
+        })
+        ->unique(fn (array $row) => strtoupper((string) $row['symbol']))
+        ->take($limit);
+
+    $upserted = 0;
+    foreach ($filtered as $row) {
+        $ticker = strtoupper((string) $row['symbol']);
+        $name = (string) ($row['description'] ?? $row['displaySymbol'] ?? $ticker);
+
+        \App\Models\Symbol::query()->updateOrCreate(
+            ['ticker' => $ticker],
+            [
+                'name' => $name,
+                'asset_type' => 'stock',
+                'is_active' => true,
+                'tradeable' => true,
+                'price_source' => 'finnhub',
+            ],
+        );
+        $upserted++;
+    }
+
+    $this->info(sprintf('symbols:sync-stocks upserted %d stock tickers from %s (limit=%d).',
+        $upserted, $exchange, $limit
+    ));
+
+    return 0;
+})->purpose('Pull up to N US stock tickers from Finnhub and upsert them into the Symbol table');
+
 Artisan::command('wallet:credit {email?} {--amount=1000} {--description=Test credit}', function (
     EnsurePaperAccount $ensurePaperAccount,
     DepositFunds $depositFunds,
