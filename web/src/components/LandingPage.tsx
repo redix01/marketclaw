@@ -22,7 +22,7 @@ interface LandingPageProps {
   onViewDemo: () => void;
 }
 
-const primaryCtaLabel = (user: any) => user ? 'Dashboard' : 'Login or Get Started';
+const primaryCtaLabel = () => 'Login or Get Started';
 
 const FeatureCard = ({ icon: Icon, title, description, delay = 0 }: any) => (
   <motion.div 
@@ -104,7 +104,7 @@ export default function LandingPage({ user, onLaunchApp, onViewDemo }: LandingPa
               onClick={onLaunchApp}
               className="px-4 md:px-6 py-2.5 md:py-3 bg-white text-black rounded-full font-bold hover:scale-105 transition-all shadow-2xl shadow-white/10 flex items-center gap-2 uppercase text-[9px] md:text-[10px] tracking-widest"
             >
-              {primaryCtaLabel(user)} <ArrowUpRight size={14} className="hidden xs:block" />
+              {primaryCtaLabel()} <ArrowUpRight size={14} className="hidden xs:block" />
             </button>
             <button 
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -147,7 +147,7 @@ export default function LandingPage({ user, onLaunchApp, onViewDemo }: LandingPa
                     }}
                     className="text-left text-yellow-400 hover:text-yellow-300 transition-colors"
                   >
-                    {primaryCtaLabel(user)}
+                    {primaryCtaLabel()}
                   </button>
                 </div>
               </div>
@@ -193,7 +193,7 @@ export default function LandingPage({ user, onLaunchApp, onViewDemo }: LandingPa
                   onClick={onLaunchApp}
                   className="w-full sm:w-auto px-8 py-4 bg-yellow-500 text-black rounded-full font-bold text-base hover:scale-105 transition-all shadow-2xl shadow-yellow-500/40 flex items-center justify-center gap-3 uppercase tracking-wider"
                 >
-                  {primaryCtaLabel(user)} <ArrowRight size={18} />
+                  {primaryCtaLabel()} <ArrowRight size={18} />
                 </button>
                 {!user && (
                   <button 
@@ -384,7 +384,7 @@ export default function LandingPage({ user, onLaunchApp, onViewDemo }: LandingPa
             <div className="aspect-video rounded-[32px] overflow-hidden border border-white/5 relative">
               <img 
                 src="https://picsum.photos/seed/dashboard-premium/1600/900" 
-                alt="Dashboard" 
+                alt="Trading interface preview"
                 className="w-full h-full object-cover opacity-30 grayscale group-hover:scale-105 transition-transform duration-1000"
                 referrerPolicy="no-referrer"
               />
@@ -481,7 +481,7 @@ export default function LandingPage({ user, onLaunchApp, onViewDemo }: LandingPa
               onClick={onLaunchApp}
               className="w-full sm:w-auto px-10 py-5 bg-white text-black rounded-full font-bold text-lg md:text-xl hover:scale-105 transition-all shadow-2xl shadow-white/10 uppercase tracking-widest"
             >
-              {primaryCtaLabel(user)}
+              {primaryCtaLabel()}
             </button>
             <p className="text-zinc-500 text-xs md:text-sm font-light uppercase tracking-[0.2em]">
               No credit card required
