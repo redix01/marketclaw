@@ -22,6 +22,8 @@ interface LandingPageProps {
   onViewDemo: () => void;
 }
 
+const primaryCtaLabel = (user: any) => user ? 'Dashboard' : 'Login or Get Started';
+
 const FeatureCard = ({ icon: Icon, title, description, delay = 0 }: any) => (
   <motion.div 
     initial={{ opacity: 0, y: 20 }}
@@ -102,7 +104,7 @@ export default function LandingPage({ user, onLaunchApp, onViewDemo }: LandingPa
               onClick={onLaunchApp}
               className="px-4 md:px-6 py-2.5 md:py-3 bg-white text-black rounded-full font-bold hover:scale-105 transition-all shadow-2xl shadow-white/10 flex items-center gap-2 uppercase text-[9px] md:text-[10px] tracking-widest"
             >
-              {user ? 'Dashboard' : 'Launch'} <ArrowUpRight size={14} className="hidden xs:block" />
+              {primaryCtaLabel(user)} <ArrowUpRight size={14} className="hidden xs:block" />
             </button>
             <button 
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -145,7 +147,7 @@ export default function LandingPage({ user, onLaunchApp, onViewDemo }: LandingPa
                     }}
                     className="text-left text-yellow-400 hover:text-yellow-300 transition-colors"
                   >
-                    {user ? 'Go to Dashboard' : 'Launch Terminal'}
+                    {primaryCtaLabel(user)}
                   </button>
                 </div>
               </div>
@@ -191,7 +193,7 @@ export default function LandingPage({ user, onLaunchApp, onViewDemo }: LandingPa
                   onClick={onLaunchApp}
                   className="w-full sm:w-auto px-8 py-4 bg-yellow-500 text-black rounded-full font-bold text-base hover:scale-105 transition-all shadow-2xl shadow-yellow-500/40 flex items-center justify-center gap-3 uppercase tracking-wider"
                 >
-                  {user ? 'Enter Dashboard' : 'Start Trading'} <ArrowRight size={18} />
+                  {primaryCtaLabel(user)} <ArrowRight size={18} />
                 </button>
                 {!user && (
                   <button 
@@ -403,7 +405,7 @@ export default function LandingPage({ user, onLaunchApp, onViewDemo }: LandingPa
       </section>
 
       {/* Security & Fidelity Section */}
-      <section className="py-32 px-8 border-y border-white/5">
+      <section id="security" className="py-32 px-8 border-y border-white/5">
         <div className="max-w-[1400px] mx-auto">
           <div className="grid lg:grid-cols-2 gap-20 items-center">
             <div>
@@ -479,7 +481,7 @@ export default function LandingPage({ user, onLaunchApp, onViewDemo }: LandingPa
               onClick={onLaunchApp}
               className="w-full sm:w-auto px-10 py-5 bg-white text-black rounded-full font-bold text-lg md:text-xl hover:scale-105 transition-all shadow-2xl shadow-white/10 uppercase tracking-widest"
             >
-              Get Started
+              {primaryCtaLabel(user)}
             </button>
             <p className="text-zinc-500 text-xs md:text-sm font-light uppercase tracking-[0.2em]">
               No credit card required
