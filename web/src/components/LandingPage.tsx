@@ -4,7 +4,13 @@ import {
   TrendingUp, 
   Shield, 
   Zap, 
-  ArrowRight,
+  ArrowRight, 
+  Github, 
+  Globe, 
+  Cpu, 
+  BarChart3, 
+  Layers,
+  ChevronRight,
   Target,
   Globe2,
   Coins,
@@ -22,7 +28,7 @@ interface LandingPageProps {
   onViewDemo: () => void;
 }
 
-const primaryCtaLabel = () => 'Login or Get Started';
+const primaryCtaLabel = (user: any) => user ? 'Dashboard' : 'Login or Get Started';
 
 const FeatureCard = ({ icon: Icon, title, description, delay = 0 }: any) => (
   <motion.div 
@@ -86,7 +92,7 @@ export default function LandingPage({ user, onLaunchApp, onViewDemo }: LandingPa
           </div>
           
           <div className="hidden lg:flex items-center gap-12 text-sm font-medium text-zinc-400 uppercase tracking-widest">
-            <a href="#process" className="hover:text-yellow-400 transition-colors">Workflow</a>
+            <a href="#features" className="hover:text-yellow-400 transition-colors">Intelligence</a>
             <a href="#markets" className="hover:text-yellow-400 transition-colors">Markets</a>
             <a href="#demo" className="hover:text-yellow-400 transition-colors">Interface</a>
           </div>
@@ -104,7 +110,7 @@ export default function LandingPage({ user, onLaunchApp, onViewDemo }: LandingPa
               onClick={onLaunchApp}
               className="px-4 md:px-6 py-2.5 md:py-3 bg-white text-black rounded-full font-bold hover:scale-105 transition-all shadow-2xl shadow-white/10 flex items-center gap-2 uppercase text-[9px] md:text-[10px] tracking-widest"
             >
-              {primaryCtaLabel()} <ArrowUpRight size={14} className="hidden xs:block" />
+              {primaryCtaLabel(user)} <ArrowUpRight size={14} className="hidden xs:block" />
             </button>
             <button 
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -125,7 +131,7 @@ export default function LandingPage({ user, onLaunchApp, onViewDemo }: LandingPa
               className="lg:hidden bg-[#050505] border-b border-white/5 overflow-hidden"
             >
               <div className="px-8 py-8 flex flex-col gap-6 text-sm font-bold uppercase tracking-[0.2em] text-zinc-400">
-                <a href="#process" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-yellow-400 transition-colors">Workflow</a>
+                <a href="#features" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-yellow-400 transition-colors">Intelligence</a>
                 <a href="#markets" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-yellow-400 transition-colors">Markets</a>
                 <a href="#demo" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-yellow-400 transition-colors">Interface</a>
                 <div className="pt-6 border-t border-white/5 flex flex-col gap-4">
@@ -147,7 +153,7 @@ export default function LandingPage({ user, onLaunchApp, onViewDemo }: LandingPa
                     }}
                     className="text-left text-yellow-400 hover:text-yellow-300 transition-colors"
                   >
-                    {primaryCtaLabel()}
+                    {primaryCtaLabel(user)}
                   </button>
                 </div>
               </div>
@@ -193,7 +199,7 @@ export default function LandingPage({ user, onLaunchApp, onViewDemo }: LandingPa
                   onClick={onLaunchApp}
                   className="w-full sm:w-auto px-8 py-4 bg-yellow-500 text-black rounded-full font-bold text-base hover:scale-105 transition-all shadow-2xl shadow-yellow-500/40 flex items-center justify-center gap-3 uppercase tracking-wider"
                 >
-                  {primaryCtaLabel()} <ArrowRight size={18} />
+                  {primaryCtaLabel(user)} <ArrowRight size={18} />
                 </button>
                 {!user && (
                   <button 
@@ -274,7 +280,7 @@ export default function LandingPage({ user, onLaunchApp, onViewDemo }: LandingPa
       <MarketTicker />
 
       {/* The Process Section */}
-      <section id="process" className="py-32 px-8 border-b border-white/5">
+      <section id="features" className="py-32 px-8 border-b border-white/5">
         <div className="max-w-[1400px] mx-auto">
           <div className="text-center mb-24">
             <span className="text-yellow-400 text-[10px] font-bold uppercase tracking-[0.4em] mb-6 block">
@@ -384,7 +390,7 @@ export default function LandingPage({ user, onLaunchApp, onViewDemo }: LandingPa
             <div className="aspect-video rounded-[32px] overflow-hidden border border-white/5 relative">
               <img 
                 src="https://picsum.photos/seed/dashboard-premium/1600/900" 
-                alt="Trading interface preview"
+                alt="Dashboard" 
                 className="w-full h-full object-cover opacity-30 grayscale group-hover:scale-105 transition-transform duration-1000"
                 referrerPolicy="no-referrer"
               />
@@ -481,7 +487,7 @@ export default function LandingPage({ user, onLaunchApp, onViewDemo }: LandingPa
               onClick={onLaunchApp}
               className="w-full sm:w-auto px-10 py-5 bg-white text-black rounded-full font-bold text-lg md:text-xl hover:scale-105 transition-all shadow-2xl shadow-white/10 uppercase tracking-widest"
             >
-              {primaryCtaLabel()}
+              {primaryCtaLabel(user)}
             </button>
             <p className="text-zinc-500 text-xs md:text-sm font-light uppercase tracking-[0.2em]">
               No credit card required
@@ -493,8 +499,8 @@ export default function LandingPage({ user, onLaunchApp, onViewDemo }: LandingPa
       {/* Footer */}
       <footer className="py-24 border-t border-white/5 px-8 bg-[#050505]">
         <div className="max-w-[1400px] mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-16 mb-24">
-            <div className="col-span-1 md:col-span-2">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-16 mb-24">
+            <div className="col-span-2">
               <div className="flex items-center gap-4 mb-8">
                 <div className="w-10 h-10 bg-yellow-500 rounded-xl flex items-center justify-center">
                   <Bot className="text-black" size={24} />
@@ -505,22 +511,49 @@ export default function LandingPage({ user, onLaunchApp, onViewDemo }: LandingPa
                 Empowering traders with autonomous financial intelligence across every asset class.
               </p>
             </div>
-
+            
             <div>
               <h4 className="text-white font-bold uppercase tracking-widest text-xs mb-8">Platform</h4>
               <ul className="space-y-4 text-zinc-500 text-sm">
-                <li><a href="#process" className="hover:text-white transition-colors">Workflow</a></li>
+                <li><a href="#features" className="hover:text-white transition-colors">Intelligence</a></li>
                 <li><a href="#markets" className="hover:text-white transition-colors">Markets</a></li>
                 <li><a href="#demo" className="hover:text-white transition-colors">Interface</a></li>
                 <li><a href="#faq" className="hover:text-white transition-colors">FAQ</a></li>
               </ul>
             </div>
-          </div>
 
-          <div className="pt-12 border-t border-white/5">
+            <div>
+              <h4 className="text-white font-bold uppercase tracking-widest text-xs mb-8">Connect</h4>
+              <div className="flex gap-4">
+                <a
+                  href="https://github.com/ebuka-odih/marketclaw"
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label="Open MarketClaw on GitHub"
+                  className="w-12 h-12 bg-zinc-900 border border-white/5 rounded-2xl flex items-center justify-center text-zinc-400 hover:text-white transition-all"
+                >
+                  <Github size={20} />
+                </a>
+                <a
+                  href="/"
+                  aria-label="Open MarketClaw home"
+                  className="w-12 h-12 bg-zinc-900 border border-white/5 rounded-2xl flex items-center justify-center text-zinc-400 hover:text-white transition-all"
+                >
+                  <Globe size={20} />
+                </a>
+              </div>
+            </div>
+          </div>
+          
+          <div className="pt-12 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-8">
             <p className="text-[10px] text-zinc-600 uppercase tracking-[0.4em] font-bold">
               © 2026 MarketClaw. All Rights Reserved.
             </p>
+            <div className="flex gap-8 text-[10px] text-zinc-600 uppercase tracking-[0.2em] font-bold">
+              <a href="#security" className="hover:text-white transition-colors">Security</a>
+              <a href="#faq" className="hover:text-white transition-colors">FAQ</a>
+              <a href="#demo" className="hover:text-white transition-colors">Demo</a>
+            </div>
           </div>
         </div>
       </footer>
