@@ -1612,8 +1612,40 @@ function RunningTrader({
     [liveSymbols, assetType]
   );
   const displayedSymbols = filteredSymbols.length > 0 ? filteredSymbols : liveSymbols;
-  const sessionStartRef = useRef<number>(botStartedAt ? new Date(botStartedAt).getTime() : Date.now());
+  const liveSymbolsRef = useRef(displayedSymbols);
+  liveSymbolsRef.current = displayedSymbols;
+  const configRef = useRef(config);
+  configRef.current = config;
+
+  const baseWallet = account?.cashBalance ?? 192.23;
+  const baseWalletRef = useRef(baseWallet);
+  baseWalletRef.current = baseWallet;
+
+  const persistedRef = useRef<PersistedSession | null>(loadPersisted());
+
+  const sessionStartRef = useRef<number>(persistedRef.current?.sessionStart ?? Date.now());
+
+  const [grids, setGrids] = useState<GridConfig[]>(() => {
+    const persisted = persistedRef.current;
+    const persistedMatchesType = persisted?.grids?.length
+      && persisted.grids.every((g) => g.type === assetType);
+    if (persistedMatchesType) {
+      const maxId = persisted!.gridIdCounter ?? 0;
+      gridIdCounter = Math.max(gridIdCounter, maxId);
+      return persisted!.grids;
+    }
+    const pool = filteredSymbols.length > 0 ? filteredSymbols : liveSymbols;
+    const slots = Math.min(config.maxOpenPositions, pool.length);
+    return pool.slice(0, slots).map((symbol, index) => buildGrid(symbol, index, Date.now(), config, baseWallet));
+  });
+  const [closedTrades, setClosedTrades] = useState<LocalClosedTrade[]>(
+    () => persistedRef.current?.closedTrades ?? []
+  );
+  const [sessionRealized, setSessionRealized] = useState(
+    () => persistedRef.current?.sessionRealized ?? 0
+  );
   const [now, setNow] = useState(Date.now());
+  const [emergencyHalted, setEmergencyHalted] = useState(false);
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 1000);
@@ -1711,6 +1743,12 @@ function RunningTrader({
   ticksRef.current = ticks;
   const liveMarketPricesRef = useRef<Record<string, number>>({});
   liveMarketPricesRef.current = liveMarketPrices;
+  const gridsRef = useRef(grids);
+  gridsRef.current = grids;
+  const sessionRealizedRef = useRef(sessionRealized);
+  sessionRealizedRef.current = sessionRealized;
+  const haltedRef = useRef(emergencyHalted);
+  haltedRef.current = emergencyHalted;
 
   useEffect(() => {
     if (assetType !== 'crypto' || filteredSymbols.length === 0) {
@@ -1759,9 +1797,17 @@ function RunningTrader({
     const loop = (nowMs: number) => {
       if (nowMs - last >= 750) {
         last = nowMs;
+        const currentGrids = gridsRef.current;
+        const cfg = configRef.current;
+        const halted = haltedRef.current;
         const nextTicks: Record<string, GridTick> = {};
+        const closedThisRound: LocalClosedTrade[] = [];
+        let realizedDelta = 0;
 
-        for (const grid of grids) {
+        const replacements: { index: number; grid: GridConfig }[] = [];
+
+        for (let i = 0; i < currentGrids.length; i += 1) {
+          const grid = currentGrids[i];
           const tick = tickGrid(
             grid,
             ticksRef.current[grid.id],
@@ -1822,13 +1868,52 @@ function RunningTrader({
         }
 
         setTicks(nextTicks);
+
+        if (closedThisRound.length > 0) {
+          setClosedTrades((prev) => [...closedThisRound, ...prev].slice(0, 200));
+          setSessionRealized((prev) => {
+            const next = prev + realizedDelta;
+            const lossPct = baseWalletRef.current > 0 ? (next / baseWalletRef.current) * 100 : 0;
+            if (lossPct <= -cfg.emergencyStopPercent && !haltedRef.current) {
+              haltedRef.current = true;
+              setEmergencyHalted(true);
+            }
+            return next;
+          });
+        }
       }
       frame = window.requestAnimationFrame(loop);
     };
 
     frame = window.requestAnimationFrame(loop);
     return () => window.cancelAnimationFrame(frame);
-  }, [assetType, grids]);
+  }, []);
+
+  useEffect(() => {
+    savePersisted({
+      sessionStart: sessionStartRef.current,
+      grids,
+      closedTrades,
+      sessionRealized,
+      selectedSymbol,
+      gridIdCounter,
+    });
+  }, [grids, closedTrades, sessionRealized, selectedSymbol]);
+
+  useEffect(() => {
+    const handleUnload = () => {
+      savePersisted({
+        sessionStart: sessionStartRef.current,
+        grids: gridsRef.current,
+        closedTrades,
+        sessionRealized,
+        selectedSymbol,
+        gridIdCounter,
+      });
+    };
+    window.addEventListener('beforeunload', handleUnload);
+    return () => window.removeEventListener('beforeunload', handleUnload);
+  }, [closedTrades, sessionRealized, selectedSymbol]);
 
   const enriched = useMemo(
     () =>
@@ -1881,7 +1966,6 @@ function RunningTrader({
   const losses = realClosed.length - wins;
   const closedCount = realClosed.length;
   const winRate = closedCount > 0 ? Math.round((wins / closedCount) * 100) : 0;
-  const emergencyHalted = realClosed.some((trade) => trade.closeReason === 'stop_loss') && assetPositions.length === 0;
 
   const sessionDuration = useMemo(() => {
     const elapsedSec = Math.max(0, Math.floor((now - sessionStartRef.current) / 1000));
