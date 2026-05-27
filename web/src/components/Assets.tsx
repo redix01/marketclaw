@@ -1482,6 +1482,72 @@ function NumberInput({
   );
 }
 
+function LiveNumberInput({
+  value,
+  min,
+  max,
+  integer,
+  onChange,
+  suffix,
+}: {
+  value: number;
+  min?: number;
+  max?: number;
+  integer?: boolean;
+  onChange: (v: number) => void;
+  suffix?: string;
+}) {
+  const [text, setText] = useState(() => String(value));
+  const focusedRef = useRef(false);
+
+  useEffect(() => {
+    if (!focusedRef.current && Number(text) !== value) {
+      setText(String(value));
+    }
+  }, [value]);
+
+  const commit = (raw: string) => {
+    const parsed = parseFloat(raw);
+    if (!Number.isFinite(parsed)) {
+      setText(String(value));
+      return;
+    }
+    let next = parsed;
+    if (integer) next = Math.round(next);
+    if (typeof min === 'number') next = Math.max(min, next);
+    if (typeof max === 'number') next = Math.min(max, next);
+    setText(String(next));
+    if (next !== value) onChange(next);
+  };
+
+  return (
+    <div className="mt-1 flex items-center gap-1">
+      <input
+        type="text"
+        inputMode={integer ? 'numeric' : 'decimal'}
+        value={text}
+        onFocus={(e) => {
+          focusedRef.current = true;
+          e.currentTarget.select();
+        }}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={(e) => {
+          focusedRef.current = false;
+          commit(e.target.value);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            commit(e.currentTarget.value);
+            e.currentTarget.blur();
+          }
+        }}
+        className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-sm font-mono text-white focus:outline-none focus:border-yellow-500/50"
+      />
+      {suffix && <span className="text-zinc-500 text-xs">{suffix}</span>}
+    </div>
+  );
+}
+
 function RunningTrader({
   config,
   assetType,
@@ -1924,48 +1990,15 @@ function RunningTrader({
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <label className="block">
               <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold flex items-center gap-1.5"><Zap size={11} className="text-yellow-400" /> Leverage</span>
-              <div className="mt-1 flex items-center gap-1">
-                <input
-                  type="number"
-                  min={1}
-                  max={100}
-                  step={1}
-                  value={liveSettings.leverage}
-                  onChange={(e) => updateLive({ leverage: clamp(parseInt(e.target.value || '1', 10), 1, 100) })}
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-sm font-mono text-white focus:outline-none focus:border-yellow-500/50"
-                />
-                <span className="text-zinc-500 text-xs">x</span>
-              </div>
+              <LiveNumberInput value={liveSettings.leverage} min={1} max={100} integer onChange={(v) => updateLive({ leverage: v })} suffix="x" />
             </label>
             <label className="block">
               <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold flex items-center gap-1.5"><TrendingUp size={11} className="text-yellow-400" /> Take Profit</span>
-              <div className="mt-1 flex items-center gap-1">
-                <input
-                  type="number"
-                  min={0.1}
-                  max={50}
-                  step={0.1}
-                  value={liveSettings.takeProfitPercent}
-                  onChange={(e) => updateLive({ takeProfitPercent: clamp(parseFloat(e.target.value || '0'), 0.1, 50) })}
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-sm font-mono text-white focus:outline-none focus:border-yellow-500/50"
-                />
-                <span className="text-zinc-500 text-xs">%</span>
-              </div>
+              <LiveNumberInput value={liveSettings.takeProfitPercent} min={0.1} max={50} onChange={(v) => updateLive({ takeProfitPercent: v })} suffix="%" />
             </label>
             <label className="block">
               <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold flex items-center gap-1.5"><ShieldAlert size={11} className="text-yellow-400" /> Stop Loss</span>
-              <div className="mt-1 flex items-center gap-1">
-                <input
-                  type="number"
-                  min={0.1}
-                  max={50}
-                  step={0.1}
-                  value={liveSettings.emergencyStopPercent}
-                  onChange={(e) => updateLive({ emergencyStopPercent: clamp(parseFloat(e.target.value || '0'), 0.1, 50) })}
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-sm font-mono text-white focus:outline-none focus:border-yellow-500/50"
-                />
-                <span className="text-zinc-500 text-xs">%</span>
-              </div>
+              <LiveNumberInput value={liveSettings.emergencyStopPercent} min={0.1} max={50} onChange={(v) => updateLive({ emergencyStopPercent: v })} suffix="%" />
             </label>
             <div className="flex items-center justify-between bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2">
               <div>
