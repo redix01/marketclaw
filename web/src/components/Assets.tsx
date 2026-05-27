@@ -1444,11 +1444,8 @@ function NumberInput({
   return (
     <div className="flex items-center gap-2">
       <input
-        type="number"
+        type="text"
         inputMode={integer ? 'numeric' : 'decimal'}
-        step={step}
-        min={min}
-        max={max}
         value={text}
         onFocus={(e) => {
           focusedRef.current = true;
