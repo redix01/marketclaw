@@ -2614,7 +2614,7 @@ function ClosedTradesSection({ trades, summary, assetType }: { trades: ClosedTra
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-bold text-white">{trade.symbol}</span>
                     <span className="text-[9px] uppercase tracking-wider text-zinc-500 font-bold">{trade.assetType}</span>
-                    {trade.autoClosed && (
+                    {trade.autoClosed ? (
                       <span className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-300 font-bold">
                         <Bot size={9} />
                         {trade.closeReason === 'stop_loss' ? 'Stop' : 'TP'}
@@ -2624,7 +2624,7 @@ function ClosedTradesSection({ trades, summary, assetType }: { trades: ClosedTra
                         <Bot size={9} />
                         Reset
                       </span>
-                    )}
+                    ) : null}
                   </div>
                   <div className="flex items-center gap-3 text-[10px] text-zinc-400 mt-1">
                     <span>Entry: <span className="text-zinc-300 font-mono">${trade.entryPrice.toFixed(2)}</span></span>
