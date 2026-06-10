@@ -28,6 +28,8 @@ class UserPreference extends Model
         'bot_stopped_at',
         'bot_asset_type',
         'commission_percent',
+        'bot_level',
+        'minimum_trading_amount',
     ];
 
     protected function casts(): array
@@ -46,6 +48,8 @@ class UserPreference extends Model
             'bot_started_at' => 'datetime',
             'bot_stopped_at' => 'datetime',
             'commission_percent' => 'float',
+            'bot_level' => 'integer',
+            'minimum_trading_amount' => 'float',
         ];
     }
 

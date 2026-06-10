@@ -352,6 +352,7 @@ export default function Assets({ positions, symbols, account, serverTrades, serv
   const [botStartedAt, setBotStartedAt] = useState<string | null>(null);
   const [traderProfiles, setTraderProfiles] = useState<Record<AssetClass, TraderProfile>>({} as Record<AssetClass, TraderProfile>);
   const [upgradeBusy, setUpgradeBusy] = useState(false);
+  const [minimumTradingAmounts, setMinimumTradingAmounts] = useState<Record<AssetClass, number>>(TRADER_MINIMUMS);
 
   // Debounced server save of preference fields the user can edit while the
   // trader is running (leverage, take-profit, stop-loss, auto-close). Local
@@ -435,6 +436,14 @@ export default function Assets({ positions, symbols, account, serverTrades, serv
       try {
         window.localStorage.setItem(RUNTIME_STORAGE_KEY, isRunning ? '1' : '0');
       } catch { /* ignore */ }
+
+      // Update minimum trading amounts from admin-set preferences
+      if (prefs.minimum_trading_amount && prefs.minimum_trading_amount > 0) {
+        setMinimumTradingAmounts({
+          stock: prefs.minimum_trading_amount,
+          crypto: prefs.minimum_trading_amount,
+        });
+      }
 
       setHydrated(true);
     }).catch(() => {
@@ -633,6 +642,7 @@ export default function Assets({ positions, symbols, account, serverTrades, serv
       symbols={liveSymbols}
       serverTrades={serverTrades}
       traderProfiles={traderProfiles}
+      minimumTradingAmounts={minimumTradingAmounts}
       onPick={handlePickTrader}
     />
   );
@@ -887,12 +897,14 @@ function TraderSelect({
   symbols,
   serverTrades,
   traderProfiles,
+  minimumTradingAmounts,
   onPick,
 }: {
   account: Account | null;
   symbols: SymbolInfo[];
   serverTrades: ClosedTrade[];
   traderProfiles: Record<AssetClass, TraderProfile>;
+  minimumTradingAmounts: Record<AssetClass, number>;
   onPick: (type: AssetClass) => void;
 }) {
   const wallet = account?.cashBalance ?? 0;
@@ -949,6 +961,7 @@ function TraderSelect({
           symbolsCount={counts.stock}
           stats={stats.stock}
           wallet={wallet}
+          minimumAmount={minimumTradingAmounts.stock}
           onPick={() => onPick('stock')}
         />
         <TraderCard
@@ -961,6 +974,7 @@ function TraderSelect({
           symbolsCount={counts.crypto}
           stats={stats.crypto}
           wallet={wallet}
+          minimumAmount={minimumTradingAmounts.crypto}
           onPick={() => onPick('crypto')}
         />
       </div>
@@ -987,6 +1001,7 @@ function TraderCard({
   symbolsCount,
   stats,
   wallet,
+  minimumAmount,
   onPick,
 }: {
   type: AssetClass;
@@ -998,9 +1013,10 @@ function TraderCard({
   symbolsCount: number;
   stats: { winRate: number; realizedPnl: number; trades: number; isLive: boolean };
   wallet: number;
+  minimumAmount: number;
   onPick: () => void;
 }) {
-  const min = TRADER_MINIMUMS[type];
+  const min = minimumAmount;
   const insufficient = wallet < min;
   const shortBy = Math.max(0, min - wallet);
   const commissionPercent = profile?.commission_percent ?? 20;

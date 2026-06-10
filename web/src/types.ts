@@ -134,6 +134,8 @@ export interface UserPreferences {
   max_open_positions?: number;
   auto_close_enabled?: boolean;
   commission_percent?: number;
+  bot_level?: number;
+  minimum_trading_amount?: number;
 }
 
 export interface TraderUpgradeRequest {

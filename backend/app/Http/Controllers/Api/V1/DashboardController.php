@@ -23,6 +23,7 @@ class DashboardController extends Controller
         $account = $ensurePaperAccount->handle($user);
 
         $autoCloseProfitablePositions->handle($account);
+        $account->refresh();
 
         return response()->json([
             'data' => $buildDashboardSnapshot->handle($account),

@@ -97,7 +97,7 @@ export default function Auth({ onAuthenticated }: AuthProps) {
     : 'Welcome to MarketClaw';
   const subheading = mode === 'forgot' ? "Enter your email and we'll send you a reset link."
     : mode === 'reset' ? 'Set a new password to regain access to your account.'
-    : 'Agentic stock & crypto paper-trading platform';
+    : 'Agentic stock & crypto trading platform';
   const submitLabel = loading ? 'Please wait...'
     : mode === 'login' ? 'Login to Dashboard'
     : mode === 'register' ? 'Create Account'
@@ -260,12 +260,7 @@ export default function Auth({ onAuthenticated }: AuthProps) {
             )}
           </form>
 
-          <div className="mt-8 pt-8 border-t border-zinc-800/50">
-            <p className="text-[10px] text-center text-zinc-500 uppercase tracking-widest font-bold mb-4">Simulation Only</p>
-            <p className="text-xs text-center text-zinc-600 leading-relaxed">
-              By continuing, you acknowledge that MarketClaw is a paper trading simulator. No real money or actual brokerage accounts are involved.
-            </p>
-          </div>
+
         </div>
       </div>
     </div>

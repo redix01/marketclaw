@@ -144,6 +144,24 @@ export const adminService = {
     return response.data;
   },
 
+  async getUserBotSettings(): Promise<any[]> {
+    const response = await apiFetch<{ data: any[] }>('/admin/user-bot-settings');
+    return response.data;
+  },
+
+  async getUserBotSetting(userId: number): Promise<any> {
+    const response = await apiFetch<{ data: any }>(`/admin/user-bot-settings/${userId}`);
+    return response.data;
+  },
+
+  async updateUserBotSetting(userId: number, payload: Record<string, unknown>) {
+    const response = await apiFetch<{ data: any }>(`/admin/user-bot-settings/${userId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+    return response.data;
+  },
+
   async updatePassword(payload: Record<string, unknown>) {
     await apiFetch('/admin/settings/password', {
       method: 'PATCH',

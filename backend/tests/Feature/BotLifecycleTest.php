@@ -213,4 +213,71 @@ class BotLifecycleTest extends TestCase
 
         $this->assertSame(940.0, (float) $account->fresh()->cash_balance);
     }
+
+    public function test_dashboard_reflects_trade_closed_during_dashboard_request(): void
+    {
+        $user = User::factory()->create();
+        Sanctum::actingAs($user);
+
+        $symbol = Symbol::query()->create([
+            'ticker' => 'AAPL',
+            'name' => 'Apple Inc.',
+            'asset_type' => 'stock',
+            'is_active' => true,
+            'tradeable' => true,
+            'price_source' => 'finnhub',
+        ]);
+
+        MarketQuote::query()->create([
+            'symbol_id' => $symbol->id,
+            'price' => 103,
+            'change' => 3,
+            'change_percent' => 3,
+            'quoted_at' => now(),
+        ]);
+
+        $account = PaperAccount::query()->create([
+            'user_id' => $user->id,
+            'base_currency' => 'USD',
+            'cash_balance' => 0,
+            'total_deposits' => 1000,
+            'total_withdrawals' => 0,
+            'status' => 'active',
+        ]);
+
+        Position::query()->create([
+            'paper_account_id' => $account->id,
+            'symbol_id' => $symbol->id,
+            'quantity' => 10,
+            'average_entry_price' => 100,
+            'market_value_snapshot' => 1000,
+            'last_valued_at' => now(),
+        ]);
+
+        UserPreference::query()->create([
+            'user_id' => $user->id,
+            'bot_running' => true,
+            'bot_asset_type' => 'stock',
+            'take_profit_percent' => 2,
+            'emergency_stop_percent' => 5,
+            'auto_close_enabled' => true,
+            'commission_percent' => 20,
+        ]);
+
+        $this->getJson('/api/v1/users/'.$user->id.'/dashboard')
+            ->assertOk()
+            ->assertJsonPath('data.account.cash_balance', 1024)
+            ->assertJsonPath('data.summary.total_equity', 1024)
+            ->assertJsonPath('data.summary.holdings_value', 0)
+            ->assertJsonPath('data.summary.open_positions_count', 0)
+            ->assertJsonCount(0, 'data.positions');
+
+        $this->assertDatabaseCount('positions', 0);
+        $this->assertDatabaseHas('orders', [
+            'paper_account_id' => $account->id,
+            'symbol_id' => $symbol->id,
+            'side' => 'sell',
+            'source' => 'bot',
+        ]);
+    }
 }

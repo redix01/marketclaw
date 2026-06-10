@@ -36,6 +36,15 @@ class BotController extends Controller
         $assetType = $validated['asset_type'] ?? $preferences->bot_asset_type ?? 'stock';
         $mode = $validated['mode'] ?? 'fresh';
         $profile = $profiles->get($assetType);
+
+        // Check minimum trading amount
+        $minimumAmount = $preferences->minimum_trading_amount ?? 0;
+        if ($minimumAmount > 0 && $account->cash_balance < $minimumAmount) {
+            return response()->json([
+                'message' => "Insufficient balance. Minimum trading amount for {$assetType} bot is \${$minimumAmount}.",
+            ], 422);
+        }
+
         $hadOpenPositions = $account->positions()
             ->whereHas('symbol', fn ($query) => $query->where('asset_type', $assetType))
             ->exists();

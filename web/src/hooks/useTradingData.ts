@@ -174,9 +174,16 @@ export function useTradingData(user: any) {
     }
 
     let cancelled = false;
+    let latestRequestId = 0;
+    let didInitialLoad = false;
 
     const load = async () => {
-      setLoading(true);
+      const requestId = latestRequestId + 1;
+      latestRequestId = requestId;
+
+      if (!didInitialLoad) {
+        setLoading(true);
+      }
 
       try {
         const dashboardResponse = await apiFetch<{ data: any }>(`/users/${uid}/dashboard`);
@@ -191,7 +198,7 @@ export function useTradingData(user: any) {
           tradingService.getPreferences(uid),
         ]);
 
-        if (cancelled) return;
+        if (cancelled || requestId !== latestRequestId) return;
 
         setDashboard(mapDashboard(dashboardResponse.data));
         setAccount(mapAccount(accountResponse.data));
@@ -239,7 +246,8 @@ export function useTradingData(user: any) {
           manualClosedCount: Number(closedTradesResponse.summary.manual_closed_count ?? 0),
         } : null);
       } finally {
-        if (!cancelled) {
+        if (!cancelled && requestId === latestRequestId) {
+          didInitialLoad = true;
           setLoading(false);
         }
       }

@@ -96,6 +96,8 @@ export default function AdminConsole({ tab }: AdminConsoleProps) {
   const [tradePnlDrafts, setTradePnlDrafts] = useState<Record<number, string>>({});
   const [traderProfileForms, setTraderProfileForms] = useState<Record<number, { title: string; description: string; commission_percent: string; level: string }>>({});
   const [upgradeReviewNotes, setUpgradeReviewNotes] = useState<Record<number, string>>({});
+  const [userBotSettings, setUserBotSettings] = useState<any[]>([]);
+  const [editingUserBotSettings, setEditingUserBotSettings] = useState<{ userId: number; botLevel: string; minimumAmount: string; commissionPercent: string } | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -134,12 +136,14 @@ export default function AdminConsole({ tab }: AdminConsoleProps) {
         );
       }
       if (tab === 'trader-settings') {
-        const [profiles, requests] = await Promise.all([
+        const [profiles, requests, botSettings] = await Promise.all([
           adminService.getTraderProfiles(),
           adminService.getTraderUpgradeRequests(),
+          adminService.getUserBotSettings(),
         ]);
         setTraderProfiles(profiles);
         setTraderUpgradeRequests(requests);
+        setUserBotSettings(botSettings);
         setTraderProfileForms(
           profiles.reduce<Record<number, { title: string; description: string; commission_percent: string; level: string }>>((acc, profile) => {
             acc[profile.id] = {
@@ -484,6 +488,27 @@ export default function AdminConsole({ tab }: AdminConsoleProps) {
       await load();
     } catch (err: any) {
       setError(err.message || 'Unable to review upgrade request.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveUserBotSettings = async () => {
+    if (!editingUserBotSettings) return;
+
+    setSaving(true);
+    resetFlash();
+    try {
+      await adminService.updateUserBotSetting(editingUserBotSettings.userId, {
+        bot_level: Number(editingUserBotSettings.botLevel),
+        minimum_trading_amount: Number(editingUserBotSettings.minimumAmount),
+        commission_percent: Number(editingUserBotSettings.commissionPercent),
+      });
+      setSuccess('User bot settings updated successfully.');
+      setEditingUserBotSettings(null);
+      await load();
+    } catch (err: any) {
+      setError(err.message || 'Unable to update user bot settings.');
     } finally {
       setSaving(false);
     }
@@ -953,6 +978,68 @@ export default function AdminConsole({ tab }: AdminConsoleProps) {
               </div>
             </div>
           </Modal>
+
+          <Modal
+            title="Edit User Bot Settings"
+            open={!!editingUserBotSettings}
+            onClose={() => {
+              if (saving) {
+                return;
+              }
+              setEditingUserBotSettings(null);
+            }}
+          >
+            {editingUserBotSettings && (
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold mb-1.5 block">Bot Level</label>
+                  <input
+                    className="w-full rounded-xl border border-zinc-800 bg-zinc-900/50 px-4 py-3 text-sm"
+                    type="number"
+                    min="1"
+                    max="100"
+                    value={editingUserBotSettings.botLevel}
+                    onChange={(e) => setEditingUserBotSettings({ ...editingUserBotSettings, botLevel: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold mb-1.5 block">Minimum Trading Amount ($)</label>
+                  <input
+                    className="w-full rounded-xl border border-zinc-800 bg-zinc-900/50 px-4 py-3 text-sm"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={editingUserBotSettings.minimumAmount}
+                    onChange={(e) => setEditingUserBotSettings({ ...editingUserBotSettings, minimumAmount: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold mb-1.5 block">Commission Percent (%)</label>
+                  <input
+                    className="w-full rounded-xl border border-zinc-800 bg-zinc-900/50 px-4 py-3 text-sm"
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.01"
+                    value={editingUserBotSettings.commissionPercent}
+                    onChange={(e) => setEditingUserBotSettings({ ...editingUserBotSettings, commissionPercent: e.target.value })}
+                  />
+                </div>
+                <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:justify-end">
+                  <button
+                    className="rounded-xl border border-zinc-700 px-4 py-3 text-sm font-bold text-zinc-300"
+                    disabled={saving}
+                    onClick={() => setEditingUserBotSettings(null)}
+                  >
+                    Cancel
+                  </button>
+                  <button className="rounded-xl bg-yellow-500 px-5 py-3 text-sm font-bold text-black" disabled={saving} onClick={handleSaveUserBotSettings}>
+                    Save User Bot Settings
+                  </button>
+                </div>
+              </div>
+            )}
+          </Modal>
         </>
       )}
 
@@ -1106,6 +1193,42 @@ export default function AdminConsole({ tab }: AdminConsoleProps) {
               {traderUpgradeRequests.length === 0 && (
                 <div className="rounded-2xl border border-zinc-800 bg-zinc-900/20 px-4 py-10 text-center text-sm text-zinc-500">
                   No trader upgrade requests yet.
+                </div>
+              )}
+            </div>
+          </SectionCard>
+
+          <SectionCard title="User Bot Settings">
+            <div className="space-y-4">
+              {userBotSettings.map((setting) => (
+                <div key={setting.id} className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div>
+                      <p className="font-bold text-white">{setting.user_name ?? 'Unknown User'}</p>
+                      <p className="text-sm text-zinc-400">{setting.user_email}</p>
+                      <p className="mt-1 text-xs uppercase tracking-[0.18em] text-zinc-500 font-bold">
+                        Bot Level: {setting.bot_level} · Min Amount: ${setting.minimum_trading_amount} · Commission: {setting.commission_percent}%
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        className="rounded-xl bg-yellow-500 px-4 py-3 text-sm font-bold text-black"
+                        onClick={() => setEditingUserBotSettings({
+                          userId: setting.user_id,
+                          botLevel: String(setting.bot_level),
+                          minimumAmount: String(setting.minimum_trading_amount),
+                          commissionPercent: String(setting.commission_percent),
+                        })}
+                      >
+                        Edit Settings
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {userBotSettings.length === 0 && (
+                <div className="rounded-2xl border border-zinc-800 bg-zinc-900/20 px-4 py-10 text-center text-sm text-zinc-500">
+                  No user-specific bot settings configured yet.
                 </div>
               )}
             </div>

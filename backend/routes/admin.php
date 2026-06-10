@@ -9,6 +9,7 @@ use App\Http\Controllers\Admin\TradeController;
 use App\Http\Controllers\Admin\TraderProfileController;
 use App\Http\Controllers\Admin\TraderUpgradeRequestController;
 use App\Http\Controllers\Admin\TransactionController;
+use App\Http\Controllers\Admin\UserBotSettingsController;
 use App\Http\Controllers\Admin\UserController;
 use Illuminate\Support\Facades\Route;
 
@@ -45,6 +46,9 @@ Route::prefix('v1/admin')->group(function (): void {
         Route::patch('/trader-profiles/{traderProfile}', [TraderProfileController::class, 'update']);
         Route::get('/trader-upgrade-requests', [TraderUpgradeRequestController::class, 'index']);
         Route::patch('/trader-upgrade-requests/{traderUpgradeRequest}', [TraderUpgradeRequestController::class, 'update']);
+        Route::get('/user-bot-settings', [UserBotSettingsController::class, 'index']);
+        Route::get('/user-bot-settings/{user}', [UserBotSettingsController::class, 'show']);
+        Route::patch('/user-bot-settings/{user}', [UserBotSettingsController::class, 'update']);
         Route::patch('/settings/password', [SettingsController::class, 'updatePassword']);
     });
 });
