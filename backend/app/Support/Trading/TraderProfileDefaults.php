@@ -13,6 +13,7 @@ class TraderProfileDefaults
                 'description' => 'Tracks blue-chip and high-volatility equities; opens grid positions around technical levels.',
                 'commission_percent' => 20.0,
                 'level' => 1,
+                'minimum_amount' => 500.0,
             ],
             [
                 'asset_type' => 'crypto',
@@ -20,6 +21,7 @@ class TraderProfileDefaults
                 'description' => '24/7 grid agent on top crypto pairs — fractional sizing, faster cycles, deeper exposure ranges.',
                 'commission_percent' => 20.0,
                 'level' => 1,
+                'minimum_amount' => 200.0,
             ],
         ];
     }

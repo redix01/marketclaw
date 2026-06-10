@@ -12,6 +12,7 @@ class TraderProfile extends Model
         'description',
         'commission_percent',
         'level',
+        'minimum_amount',
     ];
 
     protected function casts(): array
@@ -19,6 +20,7 @@ class TraderProfile extends Model
         return [
             'commission_percent' => 'float',
             'level' => 'integer',
+            'minimum_amount' => 'float',
         ];
     }
 }

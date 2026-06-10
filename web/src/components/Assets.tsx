@@ -961,7 +961,7 @@ function TraderSelect({
           symbolsCount={counts.stock}
           stats={stats.stock}
           wallet={wallet}
-          minimumAmount={minimumTradingAmounts.stock}
+          minimumAmount={traderProfiles.stock?.minimum_amount ?? minimumTradingAmounts.stock}
           onPick={() => onPick('stock')}
         />
         <TraderCard
@@ -974,7 +974,7 @@ function TraderSelect({
           symbolsCount={counts.crypto}
           stats={stats.crypto}
           wallet={wallet}
-          minimumAmount={minimumTradingAmounts.crypto}
+          minimumAmount={traderProfiles.crypto?.minimum_amount ?? minimumTradingAmounts.crypto}
           onPick={() => onPick('crypto')}
         />
       </div>

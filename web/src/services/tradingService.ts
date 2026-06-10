@@ -127,6 +127,7 @@ export const tradingService = {
           description: 'Tracks blue-chip and high-volatility equities; opens grid positions around technical levels.',
           commission_percent: 20,
           level: 1,
+          minimum_amount: 500,
           pending_upgrade_request: null,
         },
         {
@@ -136,6 +137,7 @@ export const tradingService = {
           description: '24/7 grid agent on top crypto pairs — fractional sizing, faster cycles, deeper exposure ranges.',
           commission_percent: 20,
           level: 1,
+          minimum_amount: 200,
           pending_upgrade_request: null,
         },
       ];

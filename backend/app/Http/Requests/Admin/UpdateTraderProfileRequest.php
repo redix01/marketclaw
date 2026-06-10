@@ -18,6 +18,7 @@ class UpdateTraderProfileRequest extends FormRequest
             'description' => ['sometimes', 'string'],
             'commission_percent' => ['sometimes', 'numeric', 'min:0', 'max:100'],
             'level' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            'minimum_amount' => ['sometimes', 'numeric', 'min:0'],
         ];
     }
 }

@@ -155,6 +155,7 @@ class FrontendPayload
             'description' => $profile->description,
             'commission_percent' => (float) $profile->commission_percent,
             'level' => (int) $profile->level,
+            'minimum_amount' => (float) ($profile->minimum_amount ?? 0),
             'pending_upgrade_request' => $pendingRequest ? self::traderUpgradeRequest($pendingRequest) : null,
             'created_at' => optional($profile->created_at)->toISOString(),
             'updated_at' => optional($profile->updated_at)->toISOString(),

@@ -94,7 +94,7 @@ export default function AdminConsole({ tab }: AdminConsoleProps) {
   const [reviewNotes, setReviewNotes] = useState<Record<number, string>>({});
   const [userActionAmount, setUserActionAmount] = useState('');
   const [tradePnlDrafts, setTradePnlDrafts] = useState<Record<number, string>>({});
-  const [traderProfileForms, setTraderProfileForms] = useState<Record<number, { title: string; description: string; commission_percent: string; level: string }>>({});
+  const [traderProfileForms, setTraderProfileForms] = useState<Record<number, { title: string; description: string; commission_percent: string; level: string; minimum_amount: string }>>({});
   const [upgradeReviewNotes, setUpgradeReviewNotes] = useState<Record<number, string>>({});
   const [userBotSettings, setUserBotSettings] = useState<any[]>([]);
   const [editingUserBotSettings, setEditingUserBotSettings] = useState<{ userId: number; botLevel: string; minimumAmount: string; commissionPercent: string } | null>(null);
@@ -145,12 +145,13 @@ export default function AdminConsole({ tab }: AdminConsoleProps) {
         setTraderUpgradeRequests(requests);
         setUserBotSettings(botSettings);
         setTraderProfileForms(
-          profiles.reduce<Record<number, { title: string; description: string; commission_percent: string; level: string }>>((acc, profile) => {
+          profiles.reduce<Record<number, { title: string; description: string; commission_percent: string; level: string; minimum_amount: string }>>((acc, profile) => {
             acc[profile.id] = {
               title: profile.title,
               description: profile.description,
               commission_percent: String(profile.commission_percent),
               level: String(profile.level),
+              minimum_amount: String(profile.minimum_amount ?? 0),
             };
             return acc;
           }, {})
@@ -466,6 +467,7 @@ export default function AdminConsole({ tab }: AdminConsoleProps) {
         description: form.description,
         commission_percent: Number(form.commission_percent),
         level: Number(form.level),
+        minimum_amount: Number(form.minimum_amount),
       });
       setSuccess(`${profile.asset_type.toUpperCase()} trader updated successfully.`);
       await load();
@@ -1151,8 +1153,18 @@ export default function AdminConsole({ tab }: AdminConsoleProps) {
                     <input className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm" value={form.title} onChange={(e) => setTraderProfileForms((current) => ({ ...current, [profile.id]: { ...form, title: e.target.value } }))} />
                     <textarea className="min-h-28 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm" value={form.description} onChange={(e) => setTraderProfileForms((current) => ({ ...current, [profile.id]: { ...form, description: e.target.value } }))} />
                     <div className="grid grid-cols-2 gap-3">
-                      <input className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm" type="number" step="0.01" value={form.commission_percent} onChange={(e) => setTraderProfileForms((current) => ({ ...current, [profile.id]: { ...form, commission_percent: e.target.value } }))} />
-                      <input className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm" type="number" min="1" step="1" value={form.level} onChange={(e) => setTraderProfileForms((current) => ({ ...current, [profile.id]: { ...form, level: e.target.value } }))} />
+                      <div>
+                        <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold mb-1.5 block">Commission %</label>
+                        <input className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm" type="number" step="0.01" value={form.commission_percent} onChange={(e) => setTraderProfileForms((current) => ({ ...current, [profile.id]: { ...form, commission_percent: e.target.value } }))} />
+                      </div>
+                      <div>
+                        <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold mb-1.5 block">Level</label>
+                        <input className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm" type="number" min="1" step="1" value={form.level} onChange={(e) => setTraderProfileForms((current) => ({ ...current, [profile.id]: { ...form, level: e.target.value } }))} />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold mb-1.5 block">Minimum Amount to Start ($)</label>
+                      <input className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm" type="number" min="0" step="0.01" value={form.minimum_amount} onChange={(e) => setTraderProfileForms((current) => ({ ...current, [profile.id]: { ...form, minimum_amount: e.target.value } }))} />
                     </div>
                     <button className="rounded-xl bg-yellow-500 px-4 py-3 text-sm font-bold text-black" disabled={saving} onClick={() => void handleSaveTraderProfile(profile)}>
                       Save Trader Profile

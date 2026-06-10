@@ -161,6 +161,7 @@ export interface TraderProfile {
   description: string;
   commission_percent: number;
   level: number;
+  minimum_amount: number;
   pending_upgrade_request?: TraderUpgradeRequest | null;
   created_at?: string | null;
   updated_at?: string | null;
