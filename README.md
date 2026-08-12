@@ -1,41 +1,33 @@
 # MarketClaw Monolith
 
-MarketClaw is now hosted as a single Laravel application that serves the React frontend from the same container and origin as the API.
+MarketClaw is a single Laravel application with the React frontend embedded under Laravel `resources/` and built into `public/build`.
 
 ## Structure
 
-- `backend/`: Laravel API, jobs, migrations, and the HTTP entrypoint.
-- `web/`: React/Vite frontend source.
-- `docker-compose.yml`: single-app local container deployment with Postgres plus one backend container that also serves the frontend.
+- `app/`, `bootstrap/`, `config/`, `database/`, `public/`, `resources/`, `routes/`, `storage/`, `tests/`: the Laravel app.
+- `resources/js/`: React frontend source.
+- `public/build/`: committed production frontend assets for cPanel and other no-Node deploy targets.
 
 ## How it works
-
-`backend/Dockerfile` builds the React app from `web/`, copies the compiled assets into Laravel `public/`, and ships one deployable image.
 
 Laravel serves:
 
 - SPA routes like `/`, `/app/*`, `/demo/*`, and `/admin/*`
+- legacy `/backend/*` URLs redirect to the root routes
 - API routes under `/api/v1/*`
 - health checks under `/up`
 
 ## Local verification
 
-Frontend:
-
 ```bash
-cd web
 npm ci
 npm run lint
 npm run build
-```
-
-Backend:
-
-```bash
-cd backend
 composer install
 php artisan test
 ```
+
+The built frontend is committed in `public/build`, so cPanel does not need `npm` on the server.
 
 ## Deploy
 
@@ -43,6 +35,15 @@ php artisan test
 ./scripts/deploy.sh
 ```
 
-That script starts Postgres and builds one backend image that contains both the API and frontend.
+That script builds the single Laravel image for container deployments.
 
-For non-Docker hosting such as cPanel, Laravel can also run against MySQL by setting `DB_CONNECTION=mysql` in `backend/.env`.
+## cPanel
+
+For cPanel or any other no-Node host:
+
+- use this repo as one Laravel project
+- point the domain document root to `public/`
+- set `DB_CONNECTION=mysql` in `.env`
+- run `composer install`, `php artisan migrate --force`, and `php artisan config:cache`
+
+Do not host from `/backend/`. The application root is now the repository root.

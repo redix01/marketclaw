@@ -1,8 +1,8 @@
 FROM composer:2 AS vendor
 
-WORKDIR /app/backend
+WORKDIR /app
 
-COPY backend/composer.json backend/composer.lock ./
+COPY composer.json composer.lock ./
 RUN composer install \
     --no-dev \
     --no-scripts \
@@ -11,7 +11,7 @@ RUN composer install \
     --no-progress \
     --optimize-autoloader
 
-COPY backend/. .
+COPY . .
 RUN composer install \
     --no-dev \
     --prefer-dist \
@@ -21,12 +21,12 @@ RUN composer install \
 
 FROM node:22-bookworm-slim AS frontend-build
 
-WORKDIR /app/web
+WORKDIR /app
 
-COPY web/package.json web/package-lock.json ./
+COPY package.json package-lock.json ./
 RUN npm ci
 
-COPY web/. .
+COPY . .
 RUN npm run build
 
 FROM php:8.4-cli-bookworm
@@ -41,9 +41,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
-COPY backend/. .
-COPY --from=vendor /app/backend/vendor ./vendor
-COPY --from=frontend-build /app/web/dist ./public
+COPY . .
+COPY --from=vendor /app/vendor ./vendor
+COPY --from=frontend-build /app/public/build ./public/build
 
 RUN chmod +x docker/entrypoint.sh \
     && rm -f bootstrap/cache/*.php \

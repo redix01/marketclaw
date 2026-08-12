@@ -15,12 +15,21 @@
     "moduleDetection": "force",
     "allowJs": true,
     "jsx": "react-jsx",
+    "resolveJsonModule": true,
+    "allowSyntheticDefaultImports": true,
+    "types": [
+      "vite/client"
+    ],
     "paths": {
       "@/*": [
-        "./*"
+        "./resources/js/*"
       ]
     },
     "allowImportingTsExtensions": true,
     "noEmit": true
-  }
+  },
+  "include": [
+    "resources/js/**/*",
+    "resources/**/*.json"
+  ]
 }
