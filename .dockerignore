@@ -1,4 +1,6 @@
 .git
+.claude
+.codex
 .gitignore
 node_modules
 vendor
@@ -9,3 +11,4 @@ backend/node_modules
 backend/database/database.sqlite
 web/node_modules
 web/dist
+frontend*.tar.gz
