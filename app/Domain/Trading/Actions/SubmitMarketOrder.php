@@ -90,7 +90,7 @@ class SubmitMarketOrder
                     ? (($price - $entryPrice) / $entryPrice) * 100
                     : 0.0;
 
-                $this->applySell($account, $position, $quantity, $totalValue);
+                $this->applySell($account, $position, $quantity, $price, $totalValue);
 
                 $ledgerType = 'trade_sell';
                 $ledgerAmount = $totalValue;
@@ -195,6 +195,7 @@ class SubmitMarketOrder
         PaperAccount $account,
         Position $position,
         float $quantity,
+        float $price,
         float $totalValue,
     ): void {
         $newQuantity = (float) $position->quantity - $quantity;
@@ -211,7 +212,7 @@ class SubmitMarketOrder
 
         $position->update([
             'quantity' => $newQuantity,
-            'market_value_snapshot' => $newQuantity * (float) $position->average_entry_price,
+            'market_value_snapshot' => $newQuantity * $price,
             'last_valued_at' => now(),
             'admin_price_override' => null,
             'admin_price_overridden_at' => null,

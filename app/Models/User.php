@@ -45,6 +45,11 @@ class User extends Authenticatable
         return $this->hasOne(UserPreference::class);
     }
 
+    public function emailVerificationCode(): HasOne
+    {
+        return $this->hasOne(EmailVerificationCode::class);
+    }
+
     public function orders(): HasMany
     {
         return $this->hasMany(Order::class);

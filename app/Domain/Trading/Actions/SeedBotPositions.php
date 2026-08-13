@@ -56,7 +56,9 @@ class SeedBotPositions
 
     public function openFreshPositions(PaperAccount $account, UserPreference $preference, string $assetType): array
     {
-        $this->marketDataRefreshService->refreshStaleQuotes(1);
+        $heldSymbolIds = $account->positions()
+            ->whereHas('symbol', fn ($query) => $query->where('asset_type', $assetType))
+            ->pluck('symbol_id');
 
         $symbols = Symbol::query()
             ->with('latestQuote')
@@ -64,6 +66,7 @@ class SeedBotPositions
             ->where('is_active', true)
             ->where('tradeable', true)
             ->get()
+            ->reject(fn (Symbol $symbol): bool => $heldSymbolIds->contains($symbol->id))
             ->filter(fn (Symbol $symbol) => (float) optional($symbol->latestQuote)->price > 0)
             ->sortByDesc(fn (Symbol $symbol) => abs((float) optional($symbol->latestQuote)->change_percent))
             ->values();
@@ -72,7 +75,12 @@ class SeedBotPositions
             return ['opened' => 0, 'symbols' => []];
         }
 
-        $maxOpenPositions = max(1, min((int) ($preference->max_open_positions ?? 1), $symbols->count()));
+        $maxOpenPositions = max(1, (int) ($preference->max_open_positions ?? 1));
+        $remainingSlots = min(max(0, $maxOpenPositions - $heldSymbolIds->count()), $symbols->count());
+        if ($remainingSlots === 0) {
+            return ['opened' => 0, 'symbols' => []];
+        }
+
         $walletExposurePercent = max(1, min(100, (int) ($preference->wallet_exposure_percent ?? 25)));
 
         $account->refresh();
@@ -82,11 +90,11 @@ class SeedBotPositions
         }
 
         $capital = min($cashBalance, $cashBalance * ($walletExposurePercent / 100));
-        $capitalPerPosition = $capital / $maxOpenPositions;
+        $capitalPerPosition = $capital / $remainingSlots;
 
         $openedSymbols = [];
 
-        foreach ($symbols->take($maxOpenPositions) as $symbol) {
+        foreach ($symbols->take($remainingSlots) as $symbol) {
             $price = (float) optional($symbol->latestQuote)->price;
             if ($price <= 0 || $capitalPerPosition <= 0) {
                 continue;

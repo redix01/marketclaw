@@ -6,6 +6,7 @@ use App\Domain\Trading\Actions\AutoCloseProfitablePositions;
 use App\Domain\Trading\Actions\SeedBotPositions;
 use App\Models\User;
 use App\Models\UserPreference;
+use App\Models\Symbol;
 use App\Services\MarketDataRefreshService;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -48,9 +49,6 @@ Artisan::command('trader:tick {--user=}', function (
     SeedBotPositions $seed,
     MarketDataRefreshService $marketData,
 ): int {
-    // Make sure we're acting on fresh prices before checking thresholds.
-    $marketData->refreshStaleQuotes(2);
-
     $query = UserPreference::query()->where('bot_running', true);
     if ($userFilter = $this->option('user')) {
         $userId = User::query()->where('email', $userFilter)->orWhere('id', $userFilter)->value('id');
@@ -68,6 +66,19 @@ Artisan::command('trader:tick {--user=}', function (
         $this->line('No bots are currently running.');
 
         return 0;
+    }
+
+    $accountIds = $preferences
+        ->pluck('user.paperAccount.id')
+        ->filter()
+        ->values();
+
+    if ($accountIds->isNotEmpty()) {
+        $marketData->refreshSymbols(
+            Symbol::query()
+                ->whereHas('positions', fn ($query) => $query->whereIn('paper_account_id', $accountIds))
+                ->get()
+        );
     }
 
     $closedTotal = 0;
@@ -130,8 +141,7 @@ Artisan::command('trader:tick {--user=}', function (
 
 Schedule::command('trader:tick')
     ->everyMinute()
-    ->withoutOverlapping()
-    ->runInBackground();
+    ->withoutOverlapping();
 
 /**
  * Pull a broader stock universe from Finnhub and upsert into our Symbol table.

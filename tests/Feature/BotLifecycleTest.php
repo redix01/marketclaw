@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Domain\Trading\Actions\SeedBotPositions;
 use App\Models\MarketQuote;
 use App\Models\PaperAccount;
 use App\Models\Position;
@@ -279,5 +280,125 @@ class BotLifecycleTest extends TestCase
             'side' => 'sell',
             'source' => 'bot',
         ]);
+    }
+
+    public function test_bot_top_up_only_opens_remaining_slots_and_skips_existing_symbols(): void
+    {
+        $user = User::factory()->create();
+
+        $account = PaperAccount::query()->create([
+            'user_id' => $user->id,
+            'base_currency' => 'USD',
+            'cash_balance' => 900,
+            'total_deposits' => 900,
+            'total_withdrawals' => 0,
+            'status' => 'active',
+        ]);
+
+        $preference = UserPreference::query()->create([
+            'user_id' => $user->id,
+            'wallet_exposure_percent' => 100,
+            'max_open_positions' => 2,
+            'bot_running' => true,
+            'bot_asset_type' => 'stock',
+            'auto_close_enabled' => true,
+        ]);
+
+        $symbols = collect([
+            ['ticker' => 'AAPL', 'name' => 'Apple', 'price' => 100, 'change_percent' => 10],
+            ['ticker' => 'NVDA', 'name' => 'Nvidia', 'price' => 150, 'change_percent' => 9],
+            ['ticker' => 'MSFT', 'name' => 'Microsoft', 'price' => 200, 'change_percent' => 8],
+        ])->map(function (array $row) {
+            $symbol = Symbol::query()->create([
+                'ticker' => $row['ticker'],
+                'name' => $row['name'],
+                'asset_type' => 'stock',
+                'is_active' => true,
+                'tradeable' => true,
+                'price_source' => 'finnhub',
+            ]);
+
+            MarketQuote::query()->create([
+                'symbol_id' => $symbol->id,
+                'price' => $row['price'],
+                'change' => 1,
+                'change_percent' => $row['change_percent'],
+                'quoted_at' => now(),
+            ]);
+
+            return $symbol;
+        })->keyBy('ticker');
+
+        Position::query()->create([
+            'paper_account_id' => $account->id,
+            'symbol_id' => $symbols['AAPL']->id,
+            'quantity' => 1,
+            'average_entry_price' => 90,
+            'market_value_snapshot' => 100,
+            'last_valued_at' => now(),
+        ]);
+
+        $result = app(SeedBotPositions::class)->openFreshPositions($account, $preference, 'stock');
+
+        $this->assertSame(1, $result['opened']);
+        $this->assertSame(['NVDA'], $result['symbols']);
+        $this->assertSame(2, $account->fresh()->positions()->count());
+        $this->assertSame(1, $account->positions()->where('symbol_id', $symbols['AAPL']->id)->count());
+        $this->assertSame(1, $account->positions()->where('symbol_id', $symbols['NVDA']->id)->count());
+        $this->assertSame(0, $account->positions()->where('symbol_id', $symbols['MSFT']->id)->count());
+    }
+
+    public function test_partial_sell_keeps_remaining_position_valued_at_current_exit_price(): void
+    {
+        $user = User::factory()->create();
+        Sanctum::actingAs($user);
+
+        $symbol = Symbol::query()->create([
+            'ticker' => 'TSLA',
+            'name' => 'Tesla',
+            'asset_type' => 'stock',
+            'is_active' => true,
+            'tradeable' => true,
+            'price_source' => 'finnhub',
+        ]);
+
+        MarketQuote::query()->create([
+            'symbol_id' => $symbol->id,
+            'price' => 120,
+            'change' => 5,
+            'change_percent' => 4.35,
+            'quoted_at' => now(),
+        ]);
+
+        $account = PaperAccount::query()->create([
+            'user_id' => $user->id,
+            'base_currency' => 'USD',
+            'cash_balance' => 0,
+            'total_deposits' => 1000,
+            'total_withdrawals' => 0,
+            'status' => 'active',
+        ]);
+
+        Position::query()->create([
+            'paper_account_id' => $account->id,
+            'symbol_id' => $symbol->id,
+            'quantity' => 10,
+            'average_entry_price' => 100,
+            'market_value_snapshot' => 1000,
+            'last_valued_at' => now(),
+        ]);
+
+        $this->postJson('/api/v1/users/'.$user->id.'/orders', [
+            'symbol_id' => $symbol->id,
+            'side' => 'sell',
+            'quantity' => 4,
+            'source' => 'manual',
+        ])->assertCreated();
+
+        $position = $account->fresh()->positions()->where('symbol_id', $symbol->id)->firstOrFail();
+
+        $this->assertSame(6.0, (float) $position->quantity);
+        $this->assertSame(720.0, (float) $position->market_value_snapshot);
+        $this->assertSame(480.0, (float) $account->fresh()->cash_balance);
     }
 }

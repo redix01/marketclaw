@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { AlertCircle, Bot, CheckCircle2, Eye, EyeOff, KeyRound, Loader2, LogIn, Mail, UserPlus } from 'lucide-react';
-import { authService } from '../services/authService';
+import { authService, type VerificationChallenge } from '../services/authService';
 import { ApiError } from '../services/api';
 
-type AuthMode = 'login' | 'register' | 'forgot' | 'reset';
+type AuthMode = 'login' | 'register' | 'verify' | 'forgot' | 'reset';
 
 interface AuthProps {
   onAuthenticated: (session: { user: { id: number; name: string; email: string; avatar_url?: string | null; status?: string; is_admin?: boolean } }) => void;
@@ -13,12 +13,14 @@ export default function Auth({ onAuthenticated }: AuthProps) {
   const [mode, setMode] = useState<AuthMode>('login');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [verificationCode, setVerificationCode] = useState('');
   const [password, setPassword] = useState('');
   const [passwordConfirmation, setPasswordConfirmation] = useState('');
   const [resetToken, setResetToken] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showPasswordConfirmation, setShowPasswordConfirmation] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [resendingCode, setResendingCode] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
 
@@ -40,8 +42,32 @@ export default function Auth({ onAuthenticated }: AuthProps) {
     setMode(next);
     setError(null);
     setInfo(null);
+    setVerificationCode('');
     setPassword('');
     setPasswordConfirmation('');
+  };
+
+  const extractVerificationChallenge = (err: unknown): VerificationChallenge | null => {
+    if (!(err instanceof ApiError) || err.status !== 403) {
+      return null;
+    }
+
+    const payload = err.payload as { data?: Partial<VerificationChallenge> } | null;
+    if (payload?.data?.verification_required !== true || typeof payload.data.email !== 'string') {
+      return null;
+    }
+
+    return payload.data as VerificationChallenge;
+  };
+
+  const enterVerificationMode = (challenge: VerificationChallenge, message?: string) => {
+    setMode('verify');
+    setEmail(challenge.email);
+    setVerificationCode('');
+    setPassword('');
+    setPasswordConfirmation('');
+    setError(null);
+    setInfo(message || 'Enter the verification code sent to your email to continue.');
   };
 
   const reportError = (err: unknown, fallback: string) => {
@@ -66,7 +92,10 @@ export default function Auth({ onAuthenticated }: AuthProps) {
         const session = await authService.login(email, password);
         onAuthenticated(session);
       } else if (mode === 'register') {
-        const session = await authService.register(name, email, password, passwordConfirmation);
+        const response = await authService.register(name, email, password, passwordConfirmation);
+        enterVerificationMode(response.data, response.message);
+      } else if (mode === 'verify') {
+        const session = await authService.verifyEmailCode(email, verificationCode);
         onAuthenticated(session);
       } else if (mode === 'forgot') {
         const response = await authService.forgotPassword(email);
@@ -84,27 +113,51 @@ export default function Auth({ onAuthenticated }: AuthProps) {
         setPasswordConfirmation('');
       }
     } catch (err) {
+      const challenge = extractVerificationChallenge(err);
+      if (challenge) {
+        enterVerificationMode(challenge, err instanceof Error ? err.message : undefined);
+        return;
+      }
+
       reportError(err, 'Authentication failed.');
     } finally {
       setLoading(false);
     }
   };
 
+  const resendVerificationCode = async () => {
+    setResendingCode(true);
+    setError(null);
+
+    try {
+      const response = await authService.resendVerificationCode(email);
+      setInfo(response.message || 'A fresh verification code has been sent.');
+    } catch (err) {
+      reportError(err, 'Failed to resend the verification code.');
+    } finally {
+      setResendingCode(false);
+    }
+  };
+
   const showForgotLink = mode === 'login';
   const showTabs = mode === 'login' || mode === 'register';
   const heading = mode === 'forgot' ? 'Reset your password'
+    : mode === 'verify' ? 'Verify your email'
     : mode === 'reset' ? 'Choose a new password'
     : 'Welcome to MarketClaw';
   const subheading = mode === 'forgot' ? "Enter your email and we'll send you a reset link."
+    : mode === 'verify' ? 'Enter the 6-digit code we sent before you access your dashboard.'
     : mode === 'reset' ? 'Set a new password to regain access to your account.'
     : 'Agentic stock & crypto trading platform';
   const submitLabel = loading ? 'Please wait...'
     : mode === 'login' ? 'Login to Dashboard'
     : mode === 'register' ? 'Create Account'
+    : mode === 'verify' ? 'Verify & Continue'
     : mode === 'forgot' ? 'Send reset link'
     : 'Reset password';
   const SubmitIcon = mode === 'login' ? LogIn
     : mode === 'register' ? UserPlus
+    : mode === 'verify' ? KeyRound
     : mode === 'forgot' ? Mail
     : KeyRound;
 
@@ -174,10 +227,26 @@ export default function Auth({ onAuthenticated }: AuthProps) {
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 required
-                readOnly={mode === 'reset'}
+                readOnly={mode === 'reset' || mode === 'verify'}
                 className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-3 px-4 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-yellow-500/50 transition-all disabled:opacity-60 read-only:opacity-70"
               />
             </div>
+
+            {mode === 'verify' && (
+              <div>
+                <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold mb-1.5 block">Verification Code</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]{6}"
+                  maxLength={6}
+                  value={verificationCode}
+                  onChange={(event) => setVerificationCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                  required
+                  className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-3 px-4 text-sm tracking-[0.35em] text-white placeholder:text-zinc-500 focus:outline-none focus:border-yellow-500/50 transition-all"
+                />
+              </div>
+            )}
 
             {(mode === 'login' || mode === 'register' || mode === 'reset') && (
               <div>
@@ -248,6 +317,26 @@ export default function Auth({ onAuthenticated }: AuthProps) {
               {loading ? <Loader2 size={20} className="animate-spin" /> : <SubmitIcon size={18} />}
               {submitLabel}
             </button>
+
+            {mode === 'verify' && (
+              <div className="space-y-3">
+                <button
+                  type="button"
+                  onClick={resendVerificationCode}
+                  disabled={resendingCode || loading}
+                  className="w-full text-xs text-yellow-400 hover:text-yellow-300 uppercase tracking-wider font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {resendingCode ? 'Sending code...' : 'Resend verification code'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => switchMode('login')}
+                  className="w-full text-xs text-zinc-500 hover:text-zinc-300 uppercase tracking-wider font-bold transition-colors"
+                >
+                  ← Back to login
+                </button>
+              </div>
+            )}
 
             {(mode === 'forgot' || mode === 'reset') && (
               <button

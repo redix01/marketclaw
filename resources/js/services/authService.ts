@@ -14,6 +14,37 @@ type AuthResponse = {
   };
 };
 
+export type VerificationChallenge = {
+  verification_required: true;
+  email: string;
+  expires_at?: string | null;
+  expires_in_seconds?: number | null;
+  user?: {
+    id: number;
+    name: string;
+    email: string;
+    avatar_url?: string | null;
+    status?: string;
+    is_admin?: boolean;
+  };
+};
+
+type VerificationChallengeResponse = {
+  message: string;
+  data: VerificationChallenge;
+};
+
+function storeSession(response: AuthResponse) {
+  const session: SessionPayload = {
+    token: response.data.token,
+    user: response.data.user,
+  };
+
+  setStoredSession(session);
+
+  return session;
+}
+
 export const authService = {
   getSession() {
     return getStoredSession();
@@ -25,13 +56,7 @@ export const authService = {
       body: JSON.stringify({ email, password }),
     });
 
-    const session: SessionPayload = {
-      token: response.data.token,
-      user: response.data.user,
-    };
-
-    setStoredSession(session);
-    return session;
+    return storeSession(response);
   },
 
   async loginAdmin(email: string, password: string) {
@@ -40,17 +65,11 @@ export const authService = {
       body: JSON.stringify({ email, password }),
     });
 
-    const session: SessionPayload = {
-      token: response.data.token,
-      user: response.data.user,
-    };
-
-    setStoredSession(session);
-    return session;
+    return storeSession(response);
   },
 
   async register(name: string, email: string, password: string, passwordConfirmation: string) {
-    const response = await apiFetch<AuthResponse>('/auth/register', {
+    return apiFetch<VerificationChallengeResponse>('/auth/register', {
       method: 'POST',
       body: JSON.stringify({
         name,
@@ -59,14 +78,22 @@ export const authService = {
         password_confirmation: passwordConfirmation,
       }),
     });
+  },
 
-    const session: SessionPayload = {
-      token: response.data.token,
-      user: response.data.user,
-    };
+  async verifyEmailCode(email: string, code: string) {
+    const response = await apiFetch<AuthResponse>('/auth/verify-email-code', {
+      method: 'POST',
+      body: JSON.stringify({ email, code }),
+    });
 
-    setStoredSession(session);
-    return session;
+    return storeSession(response);
+  },
+
+  async resendVerificationCode(email: string) {
+    return apiFetch<{ message: string }>('/auth/resend-verification-code', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
   },
 
   async restore() {

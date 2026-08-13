@@ -5,8 +5,11 @@ namespace App\Http\Controllers\Api\V1;
 use App\Domain\Accounts\Actions\EnsurePaperAccount;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\LoginRequest;
+use App\Http\Requests\Api\V1\ResendEmailVerificationCodeRequest;
 use App\Http\Requests\Api\V1\RegisterRequest;
+use App\Http\Requests\Api\V1\VerifyEmailCodeRequest;
 use App\Models\User;
+use App\Services\EmailVerificationCodeService;
 use App\Support\Api\FrontendPayload;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -17,33 +20,36 @@ use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
-    public function register(RegisterRequest $request, EnsurePaperAccount $ensurePaperAccount): JsonResponse
+    public function register(
+        RegisterRequest $request,
+        EnsurePaperAccount $ensurePaperAccount,
+        EmailVerificationCodeService $emailVerificationCodeService,
+    ): JsonResponse
     {
         $user = User::query()->create([
             'name' => $request->validated('name'),
             'email' => $request->validated('email'),
             'password' => $request->validated('password'),
-            'status' => 'active',
+            'status' => 'pending_verification',
         ]);
 
-        // New self-registered accounts start at $0.00. The user must fund
-        // their wallet via the deposit flow before they can trade.
-        $account = $ensurePaperAccount->handle($user, 0.0);
-        $user->loadMissing('preferences');
-        $token = $user->createToken('web')->plainTextToken;
+        $ensurePaperAccount->handle($user, 0.0);
+        $emailVerificationCodeService->send($user);
 
         return response()->json([
-            'message' => 'Account created successfully.',
+            'message' => 'Account created. Enter the verification code sent to your email to continue.',
             'data' => [
-                'token' => $token,
-                'user' => FrontendPayload::user($user),
-                'account' => FrontendPayload::account($account),
-                'preferences' => $user->preferences ? FrontendPayload::preference($user->preferences) : null,
+                ...$emailVerificationCodeService->challengePayload($user),
+                'user' => FrontendPayload::user($user->fresh()),
             ],
-        ], 201);
+        ], 202);
     }
 
-    public function login(LoginRequest $request, EnsurePaperAccount $ensurePaperAccount): JsonResponse
+    public function login(
+        LoginRequest $request,
+        EnsurePaperAccount $ensurePaperAccount,
+        EmailVerificationCodeService $emailVerificationCodeService,
+    ): JsonResponse
     {
         $user = User::query()->where('email', $request->validated('email'))->first();
 
@@ -53,21 +59,66 @@ class AuthController extends Controller
             ]);
         }
 
-        // If the user somehow has no paper account yet, ensure one — but
-        // create it empty so the user must explicitly deposit to receive
-        // any starting balance.
-        $account = $ensurePaperAccount->handle($user, 0.0);
-        $user->loadMissing('preferences');
-        $token = $user->createToken('web')->plainTextToken;
+        if ($user->status === 'disabled') {
+            throw ValidationException::withMessages([
+                'email' => ['This account is disabled. Contact support.'],
+            ]);
+        }
+
+        if (! $user->email_verified_at && $user->status === 'pending_verification') {
+            $ensurePaperAccount->handle($user, 0.0);
+            $emailVerificationCodeService->send($user);
+
+            return response()->json([
+                'message' => 'Your email address is not verified yet. Enter the code sent to your email to continue.',
+                'data' => $emailVerificationCodeService->challengePayload($user),
+            ], 403);
+        }
+
+        return $this->authenticatedResponse($user, $ensurePaperAccount, 'Logged in successfully.');
+    }
+
+    public function verifyEmailCode(
+        VerifyEmailCodeRequest $request,
+        EnsurePaperAccount $ensurePaperAccount,
+        EmailVerificationCodeService $emailVerificationCodeService,
+    ): JsonResponse
+    {
+        $user = User::query()
+            ->where('email', $request->validated('email'))
+            ->first();
+
+        if (! $user) {
+            throw ValidationException::withMessages([
+                'email' => ['We could not find an account for that email address.'],
+            ]);
+        }
+
+        $emailVerificationCodeService->assertCanVerify($user, $request->validated('code'));
+
+        $user->forceFill([
+            'email_verified_at' => now(),
+            'status' => $user->is_admin ? $user->status : 'active',
+        ])->save();
+
+        return $this->authenticatedResponse($user->fresh(), $ensurePaperAccount, 'Email verified successfully.');
+    }
+
+    public function resendVerificationCode(
+        ResendEmailVerificationCodeRequest $request,
+        EmailVerificationCodeService $emailVerificationCodeService,
+    ): JsonResponse
+    {
+        $user = User::query()
+            ->where('email', $request->validated('email'))
+            ->first();
+
+        if ($user && ! $user->email_verified_at && $user->status === 'pending_verification') {
+            $emailVerificationCodeService->send($user);
+        }
 
         return response()->json([
-            'message' => 'Logged in successfully.',
-            'data' => [
-                'token' => $token,
-                'user' => FrontendPayload::user($user),
-                'account' => FrontendPayload::account($account),
-                'preferences' => $user->preferences ? FrontendPayload::preference($user->preferences) : null,
-            ],
+            'message' => 'If that account is awaiting verification, a fresh code has been sent.',
         ]);
     }
 
@@ -117,6 +168,26 @@ class AuthController extends Controller
 
         return response()->json([
             'message' => 'Your password has been reset successfully.',
+        ]);
+    }
+
+    private function authenticatedResponse(
+        User $user,
+        EnsurePaperAccount $ensurePaperAccount,
+        string $message,
+    ): JsonResponse {
+        $account = $ensurePaperAccount->handle($user, 0.0);
+        $user->loadMissing('preferences');
+        $token = $user->createToken('web')->plainTextToken;
+
+        return response()->json([
+            'message' => $message,
+            'data' => [
+                'token' => $token,
+                'user' => FrontendPayload::user($user),
+                'account' => FrontendPayload::account($account),
+                'preferences' => $user->preferences ? FrontendPayload::preference($user->preferences) : null,
+            ],
         ]);
     }
 }
